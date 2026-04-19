@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { clearSession } from '@/lib/session';
 
 export async function POST() {
-  const cookieStore = await cookies();
-  cookieStore.delete('portal_session');
+  await clearSession();
   return NextResponse.json({ ok: true });
 }

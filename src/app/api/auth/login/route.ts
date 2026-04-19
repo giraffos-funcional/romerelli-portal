@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateVendor } from '@/lib/odoo-client';
-import { cookies } from 'next/headers';
+import { setSession } from '@/lib/session';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/login
  * Authenticate a vendor by RUT.
- * MVP: RUT-only auth. Production should add password/token.
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting by IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+
+    if (!checkRateLimit(ip, 10, 60_000)) {
+      return NextResponse.json(
+        { error: 'Demasiados intentos. Espere un minuto.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { vat } = body;
 
@@ -31,24 +43,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // MVP: Set session cookie with partner data
-    // Production: use proper JWT + session management
-    const sessionData = {
+    await setSession({
       partnerId: partner.id,
       partnerName: partner.name,
       vat: partner.vat,
       email: partner.email,
-      type: 'vendor' as const,
-      exp: Date.now() + 8 * 60 * 60 * 1000, // 8 hours
-    };
-
-    const cookieStore = await cookies();
-    cookieStore.set('portal_session', JSON.stringify(sessionData), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 8 * 60 * 60, // 8 hours
-      path: '/',
+      type: 'vendor',
+      exp: Date.now() + 8 * 60 * 60 * 1000,
     });
 
     return NextResponse.json({
