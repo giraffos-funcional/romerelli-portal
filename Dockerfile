@@ -4,6 +4,8 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+# Ensure devDependencies are installed (needed for build: tailwindcss, typescript)
+ENV NODE_ENV=development
 RUN npm ci --ignore-scripts
 
 # --- Stage 2: Build the application ---
