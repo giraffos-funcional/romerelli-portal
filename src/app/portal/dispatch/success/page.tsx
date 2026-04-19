@@ -47,10 +47,10 @@ function SuccessContent() {
             Crear Otra Guía
           </Link>
           <Link
-            href="/portal/invoices"
+            href="/portal"
             className="px-6 py-3 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
           >
-            Ir a Mis Facturas
+            Volver al Inicio
           </Link>
         </div>
       </div>

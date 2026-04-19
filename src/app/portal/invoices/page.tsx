@@ -72,6 +72,7 @@ export default function InvoicesPage() {
   const [error, setError] = useState('');
 
   // Filters
+  const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -82,6 +83,7 @@ export default function InvoicesPage() {
     setError('');
 
     const params = new URLSearchParams({ page: String(page), limit: '20' });
+    if (searchQuery) params.set('q', searchQuery);
     if (paymentFilter) params.set('paymentState', paymentFilter);
     if (dateFrom) params.set('dateFrom', dateFrom);
     if (dateTo) params.set('dateTo', dateTo);
@@ -105,13 +107,13 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, paymentFilter, dateFrom, dateTo]);
+  }, [page, searchQuery, paymentFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
 
-  const hasActiveFilters = paymentFilter || dateFrom || dateTo;
+  const hasActiveFilters = searchQuery || paymentFilter || dateFrom || dateTo;
 
   return (
     <div>
@@ -146,6 +148,41 @@ export default function InvoicesPage() {
             <span className="w-2 h-2 rounded-full bg-sky-500" />
           )}
         </button>
+      </div>
+
+      {/* Search bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar por numero de factura o referencia..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700 placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); setPage(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -203,6 +240,7 @@ export default function InvoicesPage() {
           <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
             <button
               onClick={() => {
+                setSearchQuery('');
                 setPaymentFilter('');
                 setDateFrom('');
                 setDateTo('');

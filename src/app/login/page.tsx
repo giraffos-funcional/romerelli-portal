@@ -28,7 +28,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/portal/invoices');
+      router.push('/portal');
     } catch {
       setError('Error de conexion');
     } finally {
@@ -141,7 +141,7 @@ export default function LoginPage() {
               onClick={async () => {
                 setLoading(true);
                 await fetch('/api/auth/demo', { method: 'POST' });
-                router.push('/portal/invoices');
+                router.push('/portal');
               }}
               disabled={loading}
               className="w-full text-slate-400 py-2 text-xs font-medium hover:text-slate-600 transition-colors disabled:opacity-50"

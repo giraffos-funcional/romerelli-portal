@@ -22,10 +22,20 @@ export async function GET(request: NextRequest) {
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
   const paymentState = searchParams.get('paymentState') || undefined;
+  const search = (searchParams.get('q') || '').toLowerCase();
 
   // Demo mode — return mock data
   if (session.partnerId === DEMO_PARTNER_ID) {
     let filtered = [...DEMO_INVOICES];
+    if (search) {
+      filtered = filtered.filter(
+        (inv) =>
+          inv.name.toLowerCase().includes(search) ||
+          (inv.ref && inv.ref.toLowerCase().includes(search)) ||
+          (inv.l10n_latam_document_number &&
+            String(inv.l10n_latam_document_number).toLowerCase().includes(search))
+      );
+    }
     if (paymentState) {
       filtered = filtered.filter((inv) => inv.payment_state === paymentState);
     }
