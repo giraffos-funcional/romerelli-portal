@@ -133,31 +133,31 @@ export const DEMO_INVOICES = [
 
 export const DEMO_INVOICE_LINES: Record<number, unknown[]> = {
   1001: [
-    { id: 1, name: 'Chatarra de Cobre Cat. A', product_id: [101, 'Chatarra de Cobre Cat. A'], quantity: 5000, price_unit: 120, price_subtotal: 600000, price_total: 714000, display_type: 'product' },
-    { id: 2, name: 'Chatarra de Cobre Cat. B', product_id: [102, 'Chatarra de Cobre Cat. B'], quantity: 2000, price_unit: 150, price_subtotal: 300000, price_total: 357000, display_type: 'product' },
-    { id: 3, name: 'Flete Santiago - Valparaiso', product_id: [201, 'Servicio de Flete'], quantity: 1, price_unit: 100000, price_subtotal: 100000, price_total: 119000, display_type: 'product' },
+    { id: 1, name: 'Chatarra de Cobre Cat. A', product_id: [101, 'Chatarra de Cobre Cat. A'], quantity: 5000, price_unit: 120, price_subtotal: 600000, price_total: 714000, display_type: 'product', weight: 5000 },
+    { id: 2, name: 'Chatarra de Cobre Cat. B', product_id: [102, 'Chatarra de Cobre Cat. B'], quantity: 2000, price_unit: 150, price_subtotal: 300000, price_total: 357000, display_type: 'product', weight: 2000 },
+    { id: 3, name: 'Flete Santiago - Valparaiso', product_id: [201, 'Servicio de Flete'], quantity: 1, price_unit: 100000, price_subtotal: 100000, price_total: 119000, display_type: 'product', weight: 0 },
   ],
   1002: [
-    { id: 4, name: 'Aluminio Reciclado Grado 1', product_id: [103, 'Aluminio Reciclado Grado 1'], quantity: 10000, price_unit: 180, price_subtotal: 1800000, price_total: 2142000, display_type: 'product' },
-    { id: 5, name: 'Embalaje Especial Exportacion', product_id: [202, 'Embalaje Especial'], quantity: 20, price_unit: 10000, price_subtotal: 200000, price_total: 238000, display_type: 'product' },
+    { id: 4, name: 'Aluminio Reciclado Grado 1', product_id: [103, 'Aluminio Reciclado Grado 1'], quantity: 10000, price_unit: 180, price_subtotal: 1800000, price_total: 2142000, display_type: 'product', weight: 10000 },
+    { id: 5, name: 'Embalaje Especial Exportacion', product_id: [202, 'Embalaje Especial'], quantity: 20, price_unit: 10000, price_subtotal: 200000, price_total: 238000, display_type: 'product', weight: 0 },
   ],
   1003: [
-    { id: 6, name: 'Chatarra de Hierro Industrial', product_id: [104, 'Chatarra de Hierro'], quantity: 25000, price_unit: 20, price_subtotal: 500000, price_total: 595000, display_type: 'product' },
+    { id: 6, name: 'Chatarra de Hierro Industrial', product_id: [104, 'Chatarra de Hierro'], quantity: 25000, price_unit: 20, price_subtotal: 500000, price_total: 595000, display_type: 'product', weight: 25000 },
   ],
   1004: [
-    { id: 7, name: 'Servicio de Analisis Quimico', product_id: [203, 'Analisis de Laboratorio'], quantity: 4, price_unit: 10000, price_subtotal: 40000, price_total: 47600, display_type: 'product' },
+    { id: 7, name: 'Servicio de Analisis Quimico', product_id: [203, 'Analisis de Laboratorio'], quantity: 4, price_unit: 10000, price_subtotal: 40000, price_total: 47600, display_type: 'product', weight: 0 },
   ],
   1005: [
-    { id: 8, name: 'Cobre Electrolítico Premium', product_id: [105, 'Cobre Electrolítico'], quantity: 8000, price_unit: 500, price_subtotal: 4000000, price_total: 4760000, display_type: 'product' },
-    { id: 9, name: 'Bronce Reciclado', product_id: [106, 'Bronce Reciclado'], quantity: 3000, price_unit: 250, price_subtotal: 750000, price_total: 892500, display_type: 'product' },
-    { id: 10, name: 'Transporte Especial', product_id: [204, 'Transporte Carga Pesada'], quantity: 1, price_unit: 250000, price_subtotal: 250000, price_total: 297500, display_type: 'product' },
+    { id: 8, name: 'Cobre Electrolítico Premium', product_id: [105, 'Cobre Electrolítico'], quantity: 8000, price_unit: 500, price_subtotal: 4000000, price_total: 4760000, display_type: 'product', weight: 8000 },
+    { id: 9, name: 'Bronce Reciclado', product_id: [106, 'Bronce Reciclado'], quantity: 3000, price_unit: 250, price_subtotal: 750000, price_total: 892500, display_type: 'product', weight: 3000 },
+    { id: 10, name: 'Transporte Especial', product_id: [204, 'Transporte Carga Pesada'], quantity: 1, price_unit: 250000, price_subtotal: 250000, price_total: 297500, display_type: 'product', weight: 0 },
   ],
   1006: [
-    { id: 11, name: 'Copper Scrap Grade A - Export', product_id: [107, 'Copper Scrap Grade A'], quantity: 20000, price_unit: 0.65, price_subtotal: 13000, price_total: 13000, display_type: 'product' },
-    { id: 12, name: 'International Shipping FOB', product_id: [205, 'Freight FOB'], quantity: 1, price_unit: 2200.50, price_subtotal: 2200.50, price_total: 2200.50, display_type: 'product' },
+    { id: 11, name: 'Copper Scrap Grade A - Export', product_id: [107, 'Copper Scrap Grade A'], quantity: 20000, price_unit: 0.65, price_subtotal: 13000, price_total: 13000, display_type: 'product', weight: 20000 },
+    { id: 12, name: 'International Shipping FOB', product_id: [205, 'Freight FOB'], quantity: 1, price_unit: 2200.50, price_subtotal: 2200.50, price_total: 2200.50, display_type: 'product', weight: 0 },
   ],
   1007: [
-    { id: 13, name: 'Chatarra Mixta', product_id: [108, 'Chatarra Mixta'], quantity: 15000, price_unit: 30, price_subtotal: 450000, price_total: 535500, display_type: 'product' },
-    { id: 14, name: 'Servicio de Pesaje', product_id: [206, 'Pesaje Industrial'], quantity: 3, price_unit: 50000, price_subtotal: 150000, price_total: 178500, display_type: 'product' },
+    { id: 13, name: 'Chatarra Mixta', product_id: [108, 'Chatarra Mixta'], quantity: 15000, price_unit: 30, price_subtotal: 450000, price_total: 535500, display_type: 'product', weight: 15000 },
+    { id: 14, name: 'Servicio de Pesaje', product_id: [206, 'Pesaje Industrial'], quantity: 3, price_unit: 50000, price_subtotal: 150000, price_total: 178500, display_type: 'product', weight: 0 },
   ],
 };

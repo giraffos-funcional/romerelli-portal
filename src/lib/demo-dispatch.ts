@@ -64,6 +64,11 @@ export interface DemoGuide {
   date: string;
   state: string;
   productCount: number;
+  peso: number;
+  patente: string;
+  chofer: string;
+  tipoMaterial: string;
+  referencia: string;
 }
 
 export const DEMO_GUIDES: DemoGuide[] = [];
@@ -73,6 +78,11 @@ export function createDemoGuide(data: {
   partnerId: number;
   dateDispatch: string;
   lines: Array<{ productId: number; quantity: number }>;
+  peso?: number;
+  patente?: string;
+  chofer?: string;
+  tipoMaterial?: string;
+  referencia?: string;
 }): DemoGuide {
   const partner = DEMO_PARTNERS.find((p) => p.id === data.partnerId);
   const typeLabels: Record<string, string> = {
@@ -90,6 +100,11 @@ export function createDemoGuide(data: {
     date: data.dateDispatch,
     state: 'confirmed',
     productCount: data.lines.length,
+    peso: data.peso || 0,
+    patente: data.patente || '',
+    chofer: data.chofer || '',
+    tipoMaterial: data.tipoMaterial || '',
+    referencia: data.referencia || '',
   };
 
   DEMO_GUIDES.push(guide);

@@ -31,11 +31,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { guideType, partnerId, dateDispatch, lines, notes, saleOrderId, customsAgencyId, useFixedPrice } = body;
+    const {
+      guideType, partnerId, dateDispatch, lines, notes,
+      peso, patente, chofer, tipoMaterial, referencia,
+      saleOrderId, customsAgencyId, useFixedPrice,
+    } = body;
 
     if (!guideType || !partnerId || !dateDispatch || !lines?.length) {
       return NextResponse.json(
         { error: 'Faltan campos obligatorios: tipo, destinatario, fecha y al menos un producto' },
+        { status: 400 }
+      );
+    }
+
+    if (!peso || !patente || !chofer || !tipoMaterial) {
+      return NextResponse.json(
+        { error: 'Faltan datos de transporte: peso, patente, chofer y tipo de material son obligatorios' },
         { status: 400 }
       );
     }
@@ -46,6 +57,11 @@ export async function POST(request: NextRequest) {
         partnerId,
         dateDispatch,
         lines,
+        peso,
+        patente,
+        chofer,
+        tipoMaterial,
+        referencia,
       });
 
       return NextResponse.json({

@@ -14,6 +14,7 @@ interface InvoiceLine {
   price_subtotal: number;
   price_total: number;
   display_type: string;
+  weight?: number;
 }
 
 interface InvoiceDetail {
@@ -156,6 +157,27 @@ export default function InvoiceDetailPage() {
   const productLines = invoice.lines.filter(
     (l) => l.display_type === 'product' || !l.display_type
   );
+  const totalWeight = productLines.reduce((sum, l) => sum + (l.weight || 0), 0);
+
+  async function handleDownloadPdf() {
+    try {
+      const res = await fetch(`/api/invoices/${params.id}/pdf`);
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Error al descargar PDF');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice?.l10n_latam_document_number || invoice?.name || 'factura'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Error al descargar PDF');
+    }
+  }
 
   return (
     <div>
@@ -197,11 +219,20 @@ export default function InvoiceDetailPage() {
               </p>
             )}
           </div>
+          <button
+            onClick={handleDownloadPdf}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 active:bg-slate-950 transition-all shadow-lg shadow-slate-900/25 shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Descargar PDF
+          </button>
         </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="flex items-center gap-2 mb-2">
             <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -258,6 +289,21 @@ export default function InvoiceDetailPage() {
             {formatCurrency(invoice.amount_residual, currencyCode)}
           </p>
         </div>
+        {totalWeight > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
+              </svg>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Peso Total
+              </p>
+            </div>
+            <p className="text-lg font-bold text-slate-900 tabular-nums">
+              {totalWeight.toLocaleString('es-CL')} kg
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Line items - Desktop Table */}
@@ -278,6 +324,9 @@ export default function InvoiceDetailPage() {
                 Cantidad
               </th>
               <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Peso (kg)
+              </th>
+              <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Precio Unit.
               </th>
               <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -295,6 +344,9 @@ export default function InvoiceDetailPage() {
                   {line.quantity}
                 </td>
                 <td className="px-5 py-3.5 text-sm text-slate-500 text-right tabular-nums">
+                  {line.weight ? line.weight.toLocaleString('es-CL') : '-'}
+                </td>
+                <td className="px-5 py-3.5 text-sm text-slate-500 text-right tabular-nums">
                   {formatCurrency(line.price_unit, currencyCode)}
                 </td>
                 <td className="px-5 py-3.5 text-sm text-slate-900 text-right font-semibold tabular-nums">
@@ -305,7 +357,7 @@ export default function InvoiceDetailPage() {
           </tbody>
           <tfoot className="bg-slate-50/80">
             <tr className="border-t border-slate-200">
-              <td colSpan={3} className="px-5 py-2.5 text-sm text-right text-slate-500">
+              <td colSpan={4} className="px-5 py-2.5 text-sm text-right text-slate-500">
                 Neto
               </td>
               <td className="px-5 py-2.5 text-sm text-right font-semibold text-slate-900 tabular-nums">
@@ -313,7 +365,7 @@ export default function InvoiceDetailPage() {
               </td>
             </tr>
             <tr>
-              <td colSpan={3} className="px-5 py-2.5 text-sm text-right text-slate-500">
+              <td colSpan={4} className="px-5 py-2.5 text-sm text-right text-slate-500">
                 Impuestos
               </td>
               <td className="px-5 py-2.5 text-sm text-right font-semibold text-slate-900 tabular-nums">
@@ -322,7 +374,7 @@ export default function InvoiceDetailPage() {
             </tr>
             <tr className="border-t border-slate-300">
               <td
-                colSpan={3}
+                colSpan={4}
                 className="px-5 py-3.5 text-sm text-right font-bold text-slate-700"
               >
                 Total
@@ -352,13 +404,21 @@ export default function InvoiceDetailPage() {
               <p className="text-sm font-semibold text-slate-900">
                 {line.product_id ? line.product_id[1] : line.name}
               </p>
-              <div className="mt-2.5 grid grid-cols-3 gap-3">
+              <div className="mt-2.5 grid grid-cols-4 gap-3">
                 <div>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     Cant.
                   </p>
                   <p className="text-sm font-medium text-slate-700 mt-0.5 tabular-nums">
                     {line.quantity}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Peso
+                  </p>
+                  <p className="text-sm font-medium text-slate-700 mt-0.5 tabular-nums">
+                    {line.weight ? `${line.weight.toLocaleString('es-CL')} kg` : '-'}
                   </p>
                 </div>
                 <div>

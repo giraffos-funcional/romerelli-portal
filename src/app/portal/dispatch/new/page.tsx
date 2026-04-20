@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { SearchSelect } from '@/components/dispatch/search-select';
 import { ProductLines, type ProductLine } from '@/components/dispatch/product-lines';
+import { TransportFields, type TransportData } from '@/components/dispatch/transport-fields';
 
 const TYPE_CONFIG: Record<string, { title: string; showPrice: boolean; fixedPrice?: number }> = {
   transfer: { title: 'Guía Sin Valor / Solo Traslado', showPrice: false },
@@ -22,6 +23,13 @@ function DispatchForm() {
   const [dateDispatch, setDateDispatch] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<ProductLine[]>([]);
+  const [transport, setTransport] = useState<TransportData>({
+    peso: '',
+    patente: '',
+    chofer: '',
+    tipoMaterial: '',
+    referencia: '',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,6 +52,22 @@ function DispatchForm() {
       setError('Debe seleccionar un destinatario');
       return;
     }
+    if (!transport.peso || parseFloat(transport.peso) <= 0) {
+      setError('Debe ingresar el peso');
+      return;
+    }
+    if (!transport.patente.trim()) {
+      setError('Debe ingresar la patente');
+      return;
+    }
+    if (!transport.chofer.trim()) {
+      setError('Debe ingresar el nombre del chofer');
+      return;
+    }
+    if (!transport.tipoMaterial) {
+      setError('Debe seleccionar el tipo de material');
+      return;
+    }
 
     setError('');
     setLoading(true);
@@ -57,6 +81,11 @@ function DispatchForm() {
           partnerId: partner.id,
           dateDispatch,
           notes,
+          peso: parseFloat(transport.peso),
+          patente: transport.patente.trim(),
+          chofer: transport.chofer.trim(),
+          tipoMaterial: transport.tipoMaterial,
+          referencia: transport.referencia.trim(),
           lines: lines.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
@@ -149,6 +178,9 @@ function DispatchForm() {
             />
           </div>
         </div>
+
+        {/* Transport data — all guide types */}
+        <TransportFields values={transport} onChange={setTransport} />
 
         {/* Export-specific fields */}
         {guideType === 'export' && (
