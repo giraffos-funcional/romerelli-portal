@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [vat, setVat] = useState('');
@@ -154,8 +155,16 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Dispatch link */}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          &iquest;Eres personal de despacho?{' '}
+          <Link href="/login/dispatch" className="text-sky-400 font-semibold hover:text-sky-300 transition-colors">
+            Ingresar aqui
+          </Link>
+        </p>
+
         {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-6">
+        <p className="text-center text-xs text-slate-500 mt-3">
           Romerelli SpA &mdash; Portal de Proveedores
         </p>
       </div>

@@ -559,22 +559,22 @@ export async function getExportShipmentDetail(shipmentId: number) {
  */
 export async function createExportShipment(data: {
   dus: string;
-  despacho: string;
-  booking: string;
-  saleOrderId: number;
-  customsAgencyId: number;
+  despacho?: string;
+  booking?: string;
+  saleOrderId?: number;
+  customsAgencyId?: number;
   containerLimit: number;
 }): Promise<number> {
-  return execute<number>('x_romerelli.export.shipment', 'create', [
-    {
-      dus: data.dus,
-      despacho: data.despacho,
-      booking: data.booking,
-      sale_order_id: data.saleOrderId,
-      customs_agency_id: data.customsAgencyId,
-      container_limit: data.containerLimit,
-    },
-  ]);
+  const vals: Record<string, unknown> = {
+    dus: data.dus,
+    container_limit: data.containerLimit,
+  };
+  if (data.despacho) vals.despacho = data.despacho;
+  if (data.booking) vals.booking = data.booking;
+  if (data.saleOrderId) vals.sale_order_id = data.saleOrderId;
+  if (data.customsAgencyId) vals.customs_agency_id = data.customsAgencyId;
+
+  return execute<number>('x_romerelli.export.shipment', 'create', [vals]);
 }
 
 /**

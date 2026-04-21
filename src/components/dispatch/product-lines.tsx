@@ -7,6 +7,7 @@ export interface ProductLine {
   productName: string;
   productCode: string;
   quantity: number;
+  uomId: number;
   uomName: string;
   priceUnit: number;
 }
@@ -59,6 +60,7 @@ export function ProductLines({ lines, onChange, showPrice, fixedPrice }: Product
           productName: product.name,
           productCode: product.default_code || '',
           quantity: 1,
+          uomId: product.uom_id[0],
           uomName: product.uom_id[1],
           priceUnit: fixedPrice ?? 0,
         },

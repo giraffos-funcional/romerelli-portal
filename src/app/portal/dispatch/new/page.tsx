@@ -176,13 +176,13 @@ function DispatchForm() {
         tipoMaterial: transport.tipoMaterial,
         referencia: transport.referencia.trim(),
         lines: guideType === 'export'
-          ? [{ productId: 107, quantity: parseFloat(containerData.netWeight) || 0, priceUnit: 0, description: 'Export container', uomId: 1 }]
+          ? [{ productId: 107, quantity: parseFloat(containerData.netWeight) || 0, priceUnit: 0, description: 'Export container', uomId: 3 }]
           : lines.map((l) => ({
               productId: l.productId,
               quantity: l.quantity,
               priceUnit: l.priceUnit,
               description: l.productName,
-              uomId: 1,
+              uomId: l.uomId,
             })),
       };
 

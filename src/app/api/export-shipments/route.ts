@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { dus, despacho, booking, saleOrderId, customsAgencyId, containerLimit } = body;
 
-    if (!dus || !despacho || !booking || !saleOrderId || !customsAgencyId || !containerLimit) {
+    if (!dus || !containerLimit) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios' },
+        { error: 'DUS y limite de contenedores son obligatorios' },
         { status: 400 }
       );
     }
