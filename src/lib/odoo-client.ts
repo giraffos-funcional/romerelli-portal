@@ -238,6 +238,26 @@ export async function getInvoiceDetail(
   return { ...invoice, lines };
 }
 
+/**
+ * Fetch invoice PDF from Odoo's report service.
+ * Uses the standard account.report_invoice report endpoint.
+ *
+ * TODO: Validate the exact auth flow with the target Odoo instance.
+ * Odoo report downloads generally require a session cookie (web login) rather
+ * than plain API key auth. One common approach is:
+ *   1. POST to /web/session/authenticate to get a session cookie.
+ *   2. GET /report/pdf/account.report_invoice/<id> with that cookie.
+ * Adjust once the Odoo module / instance is available for testing.
+ */
+export async function getInvoicePdf(invoiceId: number): Promise<Buffer> {
+  // Placeholder — implement once Odoo instance is available.
+  // Keeping a clear signature so the route layer is already wired up.
+  throw new Error(
+    `getInvoicePdf: not implemented (invoiceId=${invoiceId}). ` +
+      'Implement Odoo /report/pdf/account.report_invoice/<id> fetch with proper auth.'
+  );
+}
+
 // ============================================================
 // PUBLIC API — Dispatch Guides (Guias de Despacho)
 // ============================================================
@@ -324,6 +344,12 @@ export async function createDispatchGuide(data: {
   // Export specific
   saleOrderId?: number;
   customsAgencyId?: number;
+  // Transport fields (custom on stock.picking)
+  peso?: number;
+  patente?: string;
+  chofer?: string;
+  tipoMaterial?: string;
+  referencia?: string;
 }) {
   // Get the default outgoing picking type
   const pickingTypes = await execute<Array<Record<string, unknown>>>(
@@ -343,8 +369,10 @@ export async function createDispatchGuide(data: {
   const pickingType = pickingTypes[0];
   const destinationPartnerId = data.customsAgencyId || data.partnerId;
 
-  // Create the picking
-  const pickingId = await execute<number>('stock.picking', 'create', [{
+  // Build the picking create dict. Transport fields are custom (x_*) and
+  // only sent when provided — Odoo rejects unknown fields if the module
+  // isn't installed, so callers are responsible for gating on deployment.
+  const pickingValues: Record<string, unknown> = {
     partner_id: destinationPartnerId,
     picking_type_id: pickingType.id,
     location_id: (pickingType.default_location_src_id as [number, string])[0],
@@ -361,9 +389,232 @@ export async function createDispatchGuide(data: {
         location_dest_id: (pickingType.default_location_dest_id as [number, string])[0],
       },
     ]),
-  }]);
+  };
+
+  if (data.peso !== undefined) pickingValues.x_peso = data.peso;
+  if (data.patente !== undefined) pickingValues.x_patente = data.patente;
+  if (data.chofer !== undefined) pickingValues.x_chofer = data.chofer;
+  if (data.tipoMaterial !== undefined) pickingValues.x_tipo_material = data.tipoMaterial;
+  if (data.referencia !== undefined) pickingValues.x_referencia = data.referencia;
+  if (data.saleOrderId !== undefined) pickingValues.sale_id = data.saleOrderId;
+
+  const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
 
   return pickingId;
+}
+
+// ============================================================
+// PUBLIC API — Warehouses / Cost centers / Companies
+// ============================================================
+
+/**
+ * Get all warehouses (stock.warehouse).
+ */
+export async function getWarehouses() {
+  return execute<Array<Record<string, unknown>>>(
+    'stock.warehouse',
+    'search_read',
+    [[], ['name', 'code']],
+    { order: 'name' }
+  );
+}
+
+/**
+ * Get active analytic accounts (used as cost centers).
+ */
+export async function getCostCenters() {
+  return execute<Array<Record<string, unknown>>>(
+    'account.analytic.account',
+    'search_read',
+    [[['active', '=', true]], ['name', 'code']],
+    { order: 'name' }
+  );
+}
+
+/**
+ * Get the companies a given user can access (res.users.company_ids).
+ * Returns [{ id, name }] ready for the switch-company endpoint.
+ */
+export async function getAllowedCompanies(uid: number) {
+  const users = await execute<Array<Record<string, unknown>>>(
+    'res.users',
+    'read',
+    [[uid], ['company_ids']]
+  );
+
+  if (users.length === 0) return [];
+
+  const companyIds = (users[0].company_ids as number[]) || [];
+  if (companyIds.length === 0) return [];
+
+  return execute<Array<Record<string, unknown>>>(
+    'res.company',
+    'read',
+    [companyIds, ['name']]
+  );
+}
+
+// ============================================================
+// PUBLIC API — Material types
+// ============================================================
+
+/**
+ * Get material types from Odoo.
+ *
+ * TODO: Once the custom module exists, fetch from `x_romerelli.material.type`
+ * or from the selection on stock.picking.x_tipo_material. For now this
+ * returns an empty list; the API route falls back to the hardcoded list.
+ */
+export async function getMaterialTypes(): Promise<
+  Array<Record<string, unknown>>
+> {
+  return [];
+}
+
+// ============================================================
+// PUBLIC API — Export Shipments (custom x_romerelli module)
+// ============================================================
+
+/**
+ * List export shipments.
+ *
+ * TODO: Adjust model name and field list after the Odoo module is installed.
+ */
+export async function getExportShipments() {
+  return execute<Array<Record<string, unknown>>>(
+    'x_romerelli.export.shipment',
+    'search_read',
+    [
+      [],
+      [
+        'name',
+        'dus',
+        'despacho',
+        'booking',
+        'sale_order_id',
+        'customs_agency_id',
+        'container_limit',
+        'container_count',
+        'state',
+      ],
+    ],
+    { order: 'create_date desc' }
+  );
+}
+
+/**
+ * Get a single shipment with its containers.
+ *
+ * TODO: Adjust model names after the Odoo module exists.
+ */
+export async function getExportShipmentDetail(shipmentId: number) {
+  const shipments = await execute<Array<Record<string, unknown>>>(
+    'x_romerelli.export.shipment',
+    'read',
+    [
+      [shipmentId],
+      [
+        'name',
+        'dus',
+        'despacho',
+        'booking',
+        'sale_order_id',
+        'customs_agency_id',
+        'container_limit',
+        'container_count',
+        'state',
+        'container_ids',
+      ],
+    ]
+  );
+
+  if (shipments.length === 0) return null;
+
+  const shipment = shipments[0];
+  const containerIds = (shipment.container_ids as number[]) || [];
+
+  let containers: Array<Record<string, unknown>> = [];
+  if (containerIds.length > 0) {
+    containers = await execute<Array<Record<string, unknown>>>(
+      'x_romerelli.export.container',
+      'read',
+      [
+        containerIds,
+        [
+          'picking_id',
+          'container_number',
+          'seal_number',
+          'net_weight',
+          'tare_weight',
+        ],
+      ]
+    );
+  }
+
+  return { shipment, containers };
+}
+
+/**
+ * Create a new export shipment.
+ */
+export async function createExportShipment(data: {
+  dus: string;
+  despacho: string;
+  booking: string;
+  saleOrderId: number;
+  customsAgencyId: number;
+  containerLimit: number;
+}): Promise<number> {
+  return execute<number>('x_romerelli.export.shipment', 'create', [
+    {
+      dus: data.dus,
+      despacho: data.despacho,
+      booking: data.booking,
+      sale_order_id: data.saleOrderId,
+      customs_agency_id: data.customsAgencyId,
+      container_limit: data.containerLimit,
+    },
+  ]);
+}
+
+/**
+ * Register a container into an existing shipment.
+ */
+export async function addContainerToShipment(data: {
+  shipmentId: number;
+  pickingId: number;
+  containerNumber: string;
+  sealNumber: string;
+  netWeight: number;
+  tareWeight: number;
+}): Promise<number> {
+  return execute<number>('x_romerelli.export.container', 'create', [
+    {
+      shipment_id: data.shipmentId,
+      picking_id: data.pickingId,
+      container_number: data.containerNumber,
+      seal_number: data.sealNumber,
+      net_weight: data.netWeight,
+      tare_weight: data.tareWeight,
+    },
+  ]);
+}
+
+// ============================================================
+// PUBLIC API — Partner config (fixed price)
+// ============================================================
+
+/**
+ * Read per-partner fixed price configuration from res.partner.
+ * Custom fields: x_fixed_price (boolean), x_fixed_price_value (float).
+ */
+export async function getPartnerConfig(partnerId: number) {
+  const partners = await execute<Array<Record<string, unknown>>>(
+    'res.partner',
+    'read',
+    [[partnerId], ['x_fixed_price', 'x_fixed_price_value']]
+  );
+  return partners[0] || null;
 }
 
 // ============================================================

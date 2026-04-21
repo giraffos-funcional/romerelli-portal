@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
+import { getInvoicePdf } from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -35,12 +36,21 @@ export async function GET(
     });
   }
 
-  // TODO: Proxy to Odoo report service
-  // const url = `${ODOO_URL}/report/pdf/account.report_invoice/${invoiceId}`;
-  return NextResponse.json(
-    { error: 'Descarga de PDF no disponible — conexion Odoo pendiente' },
-    { status: 503 }
-  );
+  try {
+    const pdf = await getInvoicePdf(invoiceId);
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="factura-${invoiceId}.pdf"`,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching invoice PDF:', error);
+    return NextResponse.json(
+      { error: 'Descarga de PDF no disponible — conexion Odoo pendiente' },
+      { status: 503 }
+    );
+  }
 }
 
 /**

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
+import { getCostCenters } from '@/lib/odoo-client';
+
+const DEMO_PARTNER_ID = 9999;
 
 const DEMO_COST_CENTERS = [
   { id: 1, name: 'Operaciones Santiago' },
@@ -17,6 +20,18 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  // Demo mode returns hardcoded cost centers
-  return NextResponse.json(DEMO_COST_CENTERS);
+  if (session.partnerId === DEMO_PARTNER_ID) {
+    return NextResponse.json(DEMO_COST_CENTERS);
+  }
+
+  try {
+    const costCenters = await getCostCenters();
+    return NextResponse.json(costCenters);
+  } catch (error) {
+    console.error('Error fetching cost centers:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener centros de costo' },
+      { status: 500 }
+    );
+  }
 }

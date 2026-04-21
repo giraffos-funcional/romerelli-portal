@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { DEMO_PRODUCTS } from '@/lib/demo-dispatch';
+import { searchProducts } from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -24,6 +25,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(filtered);
   }
 
-  // TODO: call searchProducts from odoo-client
-  return NextResponse.json([]);
+  try {
+    const products = await searchProducts(query);
+    return NextResponse.json(products);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener productos' },
+      { status: 500 }
+    );
+  }
 }

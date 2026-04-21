@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { DEMO_SHIPMENTS, DEMO_CONTAINERS } from '@/lib/demo-export-shipments';
+import { getExportShipmentDetail } from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -19,6 +20,10 @@ export async function GET(
   const { id } = await params;
   const shipmentId = parseInt(id, 10);
 
+  if (isNaN(shipmentId)) {
+    return NextResponse.json({ error: 'ID invalido' }, { status: 400 });
+  }
+
   if (session.partnerId === DEMO_PARTNER_ID) {
     const shipment = DEMO_SHIPMENTS.find((s) => s.id === shipmentId);
     if (!shipment) {
@@ -29,5 +34,20 @@ export async function GET(
     return NextResponse.json({ shipment, containers });
   }
 
-  return NextResponse.json({ error: 'Embarque no encontrado' }, { status: 404 });
+  try {
+    const result = await getExportShipmentDetail(shipmentId);
+    if (!result) {
+      return NextResponse.json(
+        { error: 'Embarque no encontrado' },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Error fetching shipment detail:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener embarque' },
+      { status: 500 }
+    );
+  }
 }

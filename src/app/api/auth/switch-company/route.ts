@@ -16,6 +16,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { companyId } = body;
 
+    // TODO: In production, validate companyId against the Odoo user's
+    // allowed_company_ids via getAllowedCompanies(uid) from odoo-client.
+    // For now, only DEMO_COMPANIES are accepted — multi-company switching
+    // will require the real Odoo session bound to a specific user.
     const company = DEMO_COMPANIES.find((c) => c.id === companyId);
     if (!company) {
       return NextResponse.json(

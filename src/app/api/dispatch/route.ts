@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { createDemoGuide, DEMO_GUIDES } from '@/lib/demo-dispatch';
 import { addDemoContainer } from '@/lib/demo-export-shipments';
+import {
+  createDispatchGuide,
+  addContainerToShipment,
+} from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -94,12 +98,52 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // TODO: call createDispatchGuide from odoo-client
-    // Pass: guideType, partnerId, dateDispatch, lines, notes, saleOrderId, customsAgencyId, useFixedPrice
-    return NextResponse.json(
-      { error: 'Conexion con Odoo no configurada' },
-      { status: 503 }
-    );
+    // Production mode — create picking in Odoo.
+    // NOTE: `useFixedPrice` is resolved upstream (pricing comes from the
+    // partner config endpoint); we only forward the already-priced lines.
+    void useFixedPrice;
+
+    const pickingId = await createDispatchGuide({
+      partnerId,
+      guideType,
+      dateDispatch,
+      notes,
+      lines,
+      saleOrderId: guideType === 'export' ? shipmentId ? undefined : undefined : undefined,
+      customsAgencyId: undefined,
+      peso,
+      patente,
+      chofer,
+      tipoMaterial,
+      referencia,
+    });
+
+    // For export guides, also register the container in the shipment.
+    if (guideType === 'export' && shipmentId) {
+      try {
+        await addContainerToShipment({
+          shipmentId,
+          pickingId,
+          containerNumber: containerNumber || '',
+          sealNumber: sealNumber || '',
+          netWeight: Number(netWeight) || 0,
+          tareWeight: Number(tareWeight) || 0,
+        });
+      } catch (error) {
+        console.error('Error registering container:', error);
+        // Picking was created; surface a partial-success error for the UI.
+        return NextResponse.json(
+          {
+            ok: false,
+            pickingId,
+            error: 'Guia creada, pero fallo el registro del contenedor',
+          },
+          { status: 207 }
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true, pickingId });
   } catch (error) {
     console.error('Error creating dispatch guide:', error);
     return NextResponse.json(

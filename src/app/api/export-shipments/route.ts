@@ -5,6 +5,10 @@ import {
   createDemoShipment,
 } from '@/lib/demo-export-shipments';
 import { DEMO_SALE_ORDERS, DEMO_PARTNERS } from '@/lib/demo-dispatch';
+import {
+  getExportShipments,
+  createExportShipment,
+} from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -21,7 +25,16 @@ export async function GET() {
     return NextResponse.json({ shipments: DEMO_SHIPMENTS });
   }
 
-  return NextResponse.json({ shipments: [] });
+  try {
+    const shipments = await getExportShipments();
+    return NextResponse.json({ shipments });
+  } catch (error) {
+    console.error('Error fetching shipments:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener embarques' },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -62,10 +75,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, shipment });
     }
 
-    return NextResponse.json(
-      { error: 'Conexion con Odoo no configurada' },
-      { status: 503 }
-    );
+    try {
+      const shipmentId = await createExportShipment({
+        dus,
+        despacho,
+        booking,
+        saleOrderId,
+        customsAgencyId,
+        containerLimit: Number(containerLimit),
+      });
+      return NextResponse.json({ ok: true, shipmentId });
+    } catch (error) {
+      console.error('Error creating shipment in Odoo:', error);
+      return NextResponse.json(
+        { error: 'Error al crear embarque en Odoo' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error creating shipment:', error);
     return NextResponse.json(
