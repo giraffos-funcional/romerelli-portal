@@ -3,17 +3,51 @@
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { CompanySwitcher } from './company-switcher';
 
 interface PortalNavProps {
   partnerName: string;
   vat: string;
+  sessionType?: 'vendor' | 'dispatch';
+  sessionRole?: 'cajera' | 'admin_comex';
+  companyId?: number;
+  companyName?: string;
 }
 
-const NAV_LINKS = [
-  { href: '/portal', label: 'Inicio', exact: true },
-  { href: '/portal/invoices', label: 'Mis Facturas', exact: false },
-  { href: '/portal/dispatch', label: 'Guias de Despacho', exact: false },
-];
+interface NavLink {
+  href: string;
+  label: string;
+  exact: boolean;
+}
+
+function getNavLinks(sessionType?: string, sessionRole?: string): NavLink[] {
+  const links: NavLink[] = [
+    { href: '/portal', label: 'Inicio', exact: true },
+  ];
+
+  if (!sessionType || sessionType === 'vendor') {
+    // Supplier users see invoices only
+    links.push({ href: '/portal/invoices', label: 'Mis Facturas', exact: false });
+  }
+
+  if (!sessionType || sessionType === 'dispatch' || sessionType === 'vendor') {
+    // Dispatch users (both cajera and admin) see dispatch
+    if (sessionType === 'dispatch' || sessionType === 'vendor' || !sessionType) {
+      links.push({ href: '/portal/dispatch', label: 'Guias de Despacho', exact: false });
+    }
+  }
+
+  if (sessionType === 'dispatch' && sessionRole === 'admin_comex') {
+    links.push({ href: '/portal/dispatch/export-shipments', label: 'Embarques', exact: false });
+  }
+
+  // Vendors that aren't dispatch also get dispatch (for demo compatibility)
+  if (sessionType === 'vendor') {
+    // Already added above
+  }
+
+  return links;
+}
 
 const MOBILE_ICONS: Record<string, React.ReactNode> = {
   '/portal': (
@@ -31,12 +65,20 @@ const MOBILE_ICONS: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75" />
     </svg>
   ),
+  '/portal/dispatch/export-shipments': (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+    </svg>
+  ),
 };
 
-export function PortalNav({ partnerName, vat }: PortalNavProps) {
+export function PortalNav({ partnerName, vat, sessionType, sessionRole, companyId, companyName }: PortalNavProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = getNavLinks(sessionType, sessionRole);
+  const showCompanySwitcher = sessionType === 'dispatch';
 
   function isActive(href: string, exact: boolean) {
     if (exact) return pathname === href;
@@ -45,7 +87,11 @@ export function PortalNav({ partnerName, vat }: PortalNavProps) {
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
+    if (sessionType === 'dispatch') {
+      router.push('/login/dispatch');
+    } else {
+      router.push('/login');
+    }
   }
 
   return (
@@ -77,7 +123,7 @@ export function PortalNav({ partnerName, vat }: PortalNavProps) {
 
             {/* Desktop links */}
             <div className="hidden sm:flex items-center gap-1">
-              {NAV_LINKS.map((link) => {
+              {navLinks.map((link) => {
                 const active = isActive(link.href, link.exact);
                 return (
                   <Link
@@ -98,11 +144,25 @@ export function PortalNav({ partnerName, vat }: PortalNavProps) {
 
           {/* Desktop user info */}
           <div className="hidden sm:flex items-center gap-4">
+            {showCompanySwitcher && (
+              <>
+                <CompanySwitcher
+                  currentCompanyId={companyId}
+                  currentCompanyName={companyName}
+                />
+                <div className="w-px h-8 bg-slate-700" />
+              </>
+            )}
             <div className="text-right">
               <p className="text-sm font-medium text-white leading-tight">
                 {partnerName}
               </p>
-              <p className="text-xs text-slate-400">{vat}</p>
+              {vat && <p className="text-xs text-slate-400">{vat}</p>}
+              {sessionRole && (
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                  {sessionRole === 'admin_comex' ? 'Admin Comex' : 'Cajera'}
+                </p>
+              )}
             </div>
             <div className="w-px h-8 bg-slate-700" />
             <button
@@ -152,14 +212,17 @@ export function PortalNav({ partnerName, vat }: PortalNavProps) {
       {mobileMenuOpen && (
         <div className="sm:hidden border-t border-slate-700/50 bg-slate-800/50">
           <div className="px-4 py-4 space-y-1">
-            {/* Vendor info */}
+            {/* User info */}
             <div className="pb-3 mb-2 border-b border-slate-700/50">
               <p className="text-sm font-semibold text-white">{partnerName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{vat}</p>
+              {vat && <p className="text-xs text-slate-400 mt-0.5">{vat}</p>}
+              {showCompanySwitcher && companyName && (
+                <p className="text-xs text-sky-400 mt-1">{companyName}</p>
+              )}
             </div>
 
             {/* Nav links */}
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const active = isActive(link.href, link.exact);
               return (
                 <Link
@@ -172,7 +235,7 @@ export function PortalNav({ partnerName, vat }: PortalNavProps) {
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {MOBILE_ICONS[link.href]}
+                  {MOBILE_ICONS[link.href] || MOBILE_ICONS['/portal']}
                   {link.label}
                 </Link>
               );

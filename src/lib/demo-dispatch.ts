@@ -3,14 +3,19 @@
  */
 
 export const DEMO_PARTNERS = [
-  { id: 1, name: 'Minera Los Pelambres', vat: '76.009.698-9', street: 'Av. Apoquindo 4001', city: 'Santiago' },
-  { id: 2, name: 'Codelco Chile', vat: '61.704.000-K', street: 'Huérfanos 1270', city: 'Santiago' },
-  { id: 3, name: 'CAP Acero S.A.', vat: '91.297.000-0', street: 'Av. Santa Maria 0594', city: 'Santiago' },
-  { id: 4, name: 'Recycling Corp USA', vat: '99.999.001-1', street: '123 Industrial Blvd', city: 'Houston, TX' },
-  { id: 5, name: 'Metal Trading GmbH', vat: '99.999.002-2', street: 'Industriestraße 45', city: 'Hamburg' },
-  { id: 6, name: 'Aduanas Ultraport Ltda.', vat: '78.456.789-0', street: 'Av. España 801', city: 'Valparaíso' },
-  { id: 7, name: 'Agencia Aduana Stein y Cía.', vat: '77.123.456-7', street: 'Blanco 1199', city: 'Valparaíso' },
-  { id: 8, name: 'Transportes Romerelli SpA', vat: '76.543.210-K', street: 'Camino Lo Echevers 600', city: 'Quilicura' },
+  { id: 1, name: 'Minera Los Pelambres', vat: '76.009.698-9', street: 'Av. Apoquindo 4001', city: 'Santiago', fixedPrice: 50 },
+  { id: 2, name: 'Codelco Chile', vat: '61.704.000-K', street: 'Huérfanos 1270', city: 'Santiago', fixedPrice: 45 },
+  { id: 3, name: 'CAP Acero S.A.', vat: '91.297.000-0', street: 'Av. Santa Maria 0594', city: 'Santiago', fixedPrice: undefined },
+  { id: 4, name: 'Recycling Corp USA', vat: '99.999.001-1', street: '123 Industrial Blvd', city: 'Houston, TX', fixedPrice: undefined },
+  { id: 5, name: 'Metal Trading GmbH', vat: '99.999.002-2', street: 'Industriestraße 45', city: 'Hamburg', fixedPrice: undefined },
+  { id: 6, name: 'Aduanas Ultraport Ltda.', vat: '78.456.789-0', street: 'Av. España 801', city: 'Valparaíso', fixedPrice: undefined },
+  { id: 7, name: 'Agencia Aduana Stein y Cía.', vat: '77.123.456-7', street: 'Blanco 1199', city: 'Valparaíso', fixedPrice: undefined },
+  { id: 8, name: 'Transportes Romerelli SpA', vat: '76.543.210-K', street: 'Camino Lo Echevers 600', city: 'Quilicura', fixedPrice: undefined },
+];
+
+export const DEMO_COMPANIES = [
+  { id: 1, name: 'Romerelli SpA' },
+  { id: 2, name: 'Romerelli Exportaciones Ltda.' },
 ];
 
 export const DEMO_PRODUCTS = [

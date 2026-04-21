@@ -1,16 +1,37 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { SearchSelect } from '@/components/dispatch/search-select';
 import { ProductLines, type ProductLine } from '@/components/dispatch/product-lines';
 import { TransportFields, type TransportData } from '@/components/dispatch/transport-fields';
+import { ContainerFields, type ContainerData } from '@/components/dispatch/container-fields';
+import { ShipmentSelect } from '@/components/dispatch/shipment-select';
 
-const TYPE_CONFIG: Record<string, { title: string; showPrice: boolean; fixedPrice?: number }> = {
-  transfer: { title: 'Guía Sin Valor / Solo Traslado', showPrice: false },
-  national: { title: 'Guía Venta Nacional', showPrice: true },
-  export: { title: 'Guía de Exportación', showPrice: true },
+interface ShipmentOption {
+  id: number;
+  name: string;
+  dus: string;
+  containerLimit: number;
+  containersUsed: number;
+  state: string;
+}
+
+interface WarehouseOption {
+  id: number;
+  name: string;
+}
+
+interface CostCenterOption {
+  id: number;
+  name: string;
+}
+
+const TYPE_CONFIG: Record<string, { title: string; showPrice: boolean }> = {
+  transfer: { title: 'Guia Sin Valor / Solo Traslado', showPrice: false },
+  national: { title: 'Guia Venta Nacional', showPrice: true },
+  export: { title: 'Guia de Exportacion', showPrice: true },
 };
 
 function DispatchForm() {
@@ -33,18 +54,65 @@ function DispatchForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // National specific
-  const [useFixedPrice, setUseFixedPrice] = useState(false);
+  // Per-client fixed pricing for national type
+  const [clientFixedPrice, setClientFixedPrice] = useState<number | undefined>(undefined);
 
   // Export specific
-  const [saleOrder, setSaleOrder] = useState<{ id: number; name: string } | null>(null);
-  const [customsAgency, setCustomsAgency] = useState<{ id: number; name: string } | null>(null);
-  const [destinationCountry, setDestinationCountry] = useState('');
-  const [incoterm, setIncoterm] = useState('');
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentOption | null>(null);
+  const [containerData, setContainerData] = useState<ContainerData>({
+    containerNumber: '',
+    sealNumber: '',
+    netWeight: '',
+    tareWeight: '',
+  });
+
+  // Transfer specific — warehouses and cost centers
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenterOption[]>([]);
+  const [warehouseOriginId, setWarehouseOriginId] = useState('');
+  const [warehouseDestId, setWarehouseDestId] = useState('');
+  const [costCenterId, setCostCenterId] = useState('');
+
+  // Fetch warehouses and cost centers for transfer type
+  useEffect(() => {
+    if (guideType === 'transfer') {
+      fetch('/api/warehouses')
+        .then((r) => r.json())
+        .then((data) => setWarehouses(Array.isArray(data) ? data : []))
+        .catch(() => {});
+      fetch('/api/cost-centers')
+        .then((r) => r.json())
+        .then((data) => setCostCenters(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    }
+  }, [guideType]);
+
+  // Check per-client fixed pricing when partner changes
+  const handlePartnerChange = useCallback((newPartner: { id: number; name: string } | null) => {
+    setPartner(newPartner);
+    if (newPartner && guideType === 'national') {
+      // Fetch the full partner to check for fixedPrice
+      fetch(`/api/partners?q=${encodeURIComponent(newPartner.name)}`)
+        .then((r) => r.json())
+        .then((partners: Array<{ id: number; fixedPrice?: number }>) => {
+          const found = partners.find((p) => p.id === newPartner.id);
+          if (found?.fixedPrice) {
+            setClientFixedPrice(found.fixedPrice);
+            setLines((prev) => prev.map((l) => ({ ...l, priceUnit: found.fixedPrice as number })));
+          } else {
+            setClientFixedPrice(undefined);
+          }
+        })
+        .catch(() => setClientFixedPrice(undefined));
+    } else {
+      setClientFixedPrice(undefined);
+    }
+  }, [guideType]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (lines.length === 0) {
+
+    if (guideType !== 'export' && lines.length === 0) {
       setError('Debe agregar al menos un producto');
       return;
     }
@@ -69,38 +137,77 @@ function DispatchForm() {
       return;
     }
 
+    // Export validations
+    if (guideType === 'export') {
+      if (!selectedShipment) {
+        setError('Debe seleccionar un embarque de exportacion');
+        return;
+      }
+      if (!containerData.containerNumber.trim()) {
+        setError('Debe ingresar el numero de contenedor');
+        return;
+      }
+      if (!containerData.sealNumber.trim()) {
+        setError('Debe ingresar el numero de sello');
+        return;
+      }
+      if (!containerData.netWeight || parseFloat(containerData.netWeight) <= 0) {
+        setError('Debe ingresar el peso neto del contenedor');
+        return;
+      }
+      if (!containerData.tareWeight || parseFloat(containerData.tareWeight) <= 0) {
+        setError('Debe ingresar la tara del contenedor');
+        return;
+      }
+    }
+
     setError('');
     setLoading(true);
 
     try {
+      const payload: Record<string, unknown> = {
+        guideType,
+        partnerId: partner.id,
+        dateDispatch,
+        notes,
+        peso: parseFloat(transport.peso),
+        patente: transport.patente.trim(),
+        chofer: transport.chofer.trim(),
+        tipoMaterial: transport.tipoMaterial,
+        referencia: transport.referencia.trim(),
+        lines: guideType === 'export'
+          ? [{ productId: 107, quantity: parseFloat(containerData.netWeight) || 0, priceUnit: 0, description: 'Export container', uomId: 1 }]
+          : lines.map((l) => ({
+              productId: l.productId,
+              quantity: l.quantity,
+              priceUnit: l.priceUnit,
+              description: l.productName,
+              uomId: 1,
+            })),
+      };
+
+      if (guideType === 'national' && clientFixedPrice) {
+        payload.useFixedPrice = true;
+      }
+
+      if (guideType === 'export') {
+        payload.shipmentId = selectedShipment?.id;
+        payload.containerNumber = containerData.containerNumber.trim();
+        payload.sealNumber = containerData.sealNumber.trim();
+        payload.netWeight = parseFloat(containerData.netWeight);
+        payload.tareWeight = parseFloat(containerData.tareWeight);
+      }
+
+      if (guideType === 'transfer') {
+        payload.warehouseOriginId = warehouseOriginId ? parseInt(warehouseOriginId, 10) : undefined;
+        payload.warehouseDestId = warehouseDestId ? parseInt(warehouseDestId, 10) : undefined;
+        payload.costCenterId = costCenterId ? parseInt(costCenterId, 10) : undefined;
+      }
+
       const res = await fetch('/api/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          guideType,
-          partnerId: partner.id,
-          dateDispatch,
-          notes,
-          peso: parseFloat(transport.peso),
-          patente: transport.patente.trim(),
-          chofer: transport.chofer.trim(),
-          tipoMaterial: transport.tipoMaterial,
-          referencia: transport.referencia.trim(),
-          lines: lines.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            priceUnit: l.priceUnit,
-            description: l.productName,
-            uomId: 1,
-          })),
-          ...(guideType === 'national' && { useFixedPrice }),
-          ...(guideType === 'export' && {
-            saleOrderId: saleOrder?.id,
-            customsAgencyId: customsAgency?.id,
-            destinationCountry,
-            incoterm,
-          }),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -108,13 +215,11 @@ function DispatchForm() {
 
       router.push(`/portal/dispatch/success?name=${encodeURIComponent(data.guide?.name || 'GD')}&type=${guideType}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear la guía');
+      setError(err instanceof Error ? err.message : 'Error al crear la guia');
     } finally {
       setLoading(false);
     }
   }
-
-  const fixedPriceValue = useFixedPrice ? 50 : undefined;
 
   return (
     <div>
@@ -126,7 +231,7 @@ function DispatchForm() {
         <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
         </svg>
-        Volver a tipos de guía
+        Volver a tipos de guia
       </Link>
 
       <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-6">
@@ -137,7 +242,7 @@ function DispatchForm() {
         {/* Basic info */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 space-y-5">
           <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
-            Información General
+            Informacion General
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -146,7 +251,7 @@ function DispatchForm() {
               placeholder="Buscar por nombre o RUT..."
               apiUrl="/api/partners"
               value={partner}
-              onChange={setPartner}
+              onChange={handlePartnerChange}
               secondaryField="vat"
               required
             />
@@ -173,7 +278,7 @@ function DispatchForm() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="Notas adicionales para la guía..."
+              placeholder="Notas adicionales para la guia..."
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700 placeholder:text-slate-300 resize-none"
             />
           </div>
@@ -182,123 +287,118 @@ function DispatchForm() {
         {/* Transport data — all guide types */}
         <TransportFields values={transport} onChange={setTransport} />
 
-        {/* Export-specific fields */}
-        {guideType === 'export' && (
-          <div className="bg-white rounded-xl border border-emerald-200 p-5 sm:p-6 space-y-5">
-            <h2 className="text-sm font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-2">
+        {/* Transfer-specific: warehouses + cost center */}
+        {guideType === 'transfer' && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 space-y-5">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205l3 1m1.5.5l-1.5-.5M6.75 7.364V3h-3v18m3-13.636l10.5-3.819" />
               </svg>
-              Datos de Exportación
+              Bodegas y Centro de Costo
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <SearchSelect
-                label="Orden de Venta"
-                placeholder="Buscar OV..."
-                apiUrl="/api/sale-orders"
-                value={saleOrder}
-                onChange={setSaleOrder}
-                required
-              />
-
-              <SearchSelect
-                label="Agencia de Aduana"
-                placeholder="Buscar agencia..."
-                apiUrl="/api/partners"
-                value={customsAgency}
-                onChange={setCustomsAgency}
-                secondaryField="vat"
-                required
-              />
-
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  País de Destino <span className="text-red-400">*</span>
+                  Bodega Origen
                 </label>
                 <select
-                  value={destinationCountry}
-                  onChange={(e) => setDestinationCountry(e.target.value)}
-                  required
+                  value={warehouseOriginId}
+                  onChange={(e) => setWarehouseOriginId(e.target.value)}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
                 >
                   <option value="">Seleccionar...</option>
-                  <option value="US">Estados Unidos</option>
-                  <option value="DE">Alemania</option>
-                  <option value="CN">China</option>
-                  <option value="JP">Japón</option>
-                  <option value="KR">Corea del Sur</option>
-                  <option value="IN">India</option>
-                  <option value="BR">Brasil</option>
-                  <option value="PE">Perú</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Incoterm <span className="text-red-400">*</span>
+                  Bodega Destino
                 </label>
                 <select
-                  value={incoterm}
-                  onChange={(e) => setIncoterm(e.target.value)}
-                  required
+                  value={warehouseDestId}
+                  onChange={(e) => setWarehouseDestId(e.target.value)}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
                 >
                   <option value="">Seleccionar...</option>
-                  <option value="FOB">FOB - Free on Board</option>
-                  <option value="CIF">CIF - Cost, Insurance & Freight</option>
-                  <option value="CFR">CFR - Cost and Freight</option>
-                  <option value="EXW">EXW - Ex Works</option>
-                  <option value="FCA">FCA - Free Carrier</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Centro de Costo
+                </label>
+                <select
+                  value={costCenterId}
+                  onChange={(e) => setCostCenterId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
+                >
+                  <option value="">Seleccionar...</option>
+                  {costCenters.map((cc) => (
+                    <option key={cc.id} value={cc.id}>{cc.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
           </div>
         )}
 
-        {/* National-specific: fixed price toggle */}
-        {guideType === 'national' && (
-          <div className="bg-white rounded-xl border border-sky-200 p-5 sm:p-6">
-            <h2 className="text-sm font-bold text-sky-700 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        {/* Export-specific: shipment selector + container fields */}
+        {guideType === 'export' && (
+          <>
+            <div className="bg-white rounded-xl border border-emerald-200 p-5 sm:p-6 space-y-5">
+              <h2 className="text-sm font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3" />
+                </svg>
+                Embarque de Exportacion
+              </h2>
+              <ShipmentSelect
+                value={selectedShipment}
+                onChange={setSelectedShipment}
+                required
+              />
+            </div>
+            <ContainerFields values={containerData} onChange={setContainerData} />
+          </>
+        )}
+
+        {/* National-specific: per-client fixed price info */}
+        {guideType === 'national' && clientFixedPrice && (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="shrink-0 w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Configuración de Precios
-            </h2>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={useFixedPrice}
-                  onChange={(e) => {
-                    setUseFixedPrice(e.target.checked);
-                    if (e.target.checked) {
-                      setLines(lines.map((l) => ({ ...l, priceUnit: 50 })));
-                    }
-                  }}
-                  className="sr-only peer"
-                />
-                <div className="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:bg-sky-500 transition-colors" />
-                <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-4 transition-transform" />
-              </div>
-              <div>
-                <span className="text-sm font-medium text-slate-700">Usar precio fijo ($50 por unidad)</span>
-                <p className="text-xs text-slate-400">Aplica un precio fijo de $50 CLP a todos los productos</p>
-              </div>
-            </label>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-sky-800">
+                Precio fijo: ${clientFixedPrice}/kg (configurado para este cliente)
+              </p>
+              <p className="text-xs text-sky-600 mt-0.5">
+                El precio se aplica automaticamente a todos los productos
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Product lines */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
-          <ProductLines
-            lines={lines}
-            onChange={setLines}
-            showPrice={config.showPrice}
-            fixedPrice={fixedPriceValue}
-          />
-        </div>
+        {/* Product lines — not for export (export uses container) */}
+        {guideType !== 'export' && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
+            <ProductLines
+              lines={lines}
+              onChange={setLines}
+              showPrice={config.showPrice}
+              fixedPrice={clientFixedPrice}
+            />
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -332,7 +432,7 @@ function DispatchForm() {
                 Creando...
               </>
             ) : (
-              'Crear Guía de Despacho'
+              'Crear Guia de Despacho'
             )}
           </button>
         </div>

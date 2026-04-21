@@ -8,6 +8,9 @@ export interface PortalSession {
   vat: string;
   email: string;
   type: 'vendor' | 'dispatch';
+  role?: 'cajera' | 'admin_comex';
+  companyId?: number;
+  companyName?: string;
   exp: number;
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { createDemoGuide, DEMO_GUIDES } from '@/lib/demo-dispatch';
+import { addDemoContainer } from '@/lib/demo-export-shipments';
 
 const DEMO_PARTNER_ID = 9999;
 
@@ -34,7 +35,9 @@ export async function POST(request: NextRequest) {
     const {
       guideType, partnerId, dateDispatch, lines, notes,
       peso, patente, chofer, tipoMaterial, referencia,
-      saleOrderId, customsAgencyId, useFixedPrice,
+      useFixedPrice,
+      // Export fields
+      shipmentId, containerNumber, sealNumber, netWeight, tareWeight,
     } = body;
 
     if (!guideType || !partnerId || !dateDispatch || !lines?.length) {
@@ -64,23 +67,43 @@ export async function POST(request: NextRequest) {
         referencia,
       });
 
+      // For export type, also register the container in the shipment
+      if (guideType === 'export' && shipmentId) {
+        const containerResult = addDemoContainer({
+          shipmentId,
+          guideId: guide.id,
+          guideName: guide.name,
+          containerNumber: containerNumber || '',
+          sealNumber: sealNumber || '',
+          netWeight: netWeight || 0,
+          tareWeight: tareWeight || 0,
+        });
+
+        if ('error' in containerResult) {
+          return NextResponse.json(
+            { error: containerResult.error },
+            { status: 400 }
+          );
+        }
+      }
+
       return NextResponse.json({
         ok: true,
         guide,
-        message: `Guía ${guide.name} creada exitosamente (modo demo)`,
+        message: `Guia ${guide.name} creada exitosamente (modo demo)`,
       });
     }
 
     // TODO: call createDispatchGuide from odoo-client
     // Pass: guideType, partnerId, dateDispatch, lines, notes, saleOrderId, customsAgencyId, useFixedPrice
     return NextResponse.json(
-      { error: 'Conexión con Odoo no configurada' },
+      { error: 'Conexion con Odoo no configurada' },
       { status: 503 }
     );
   } catch (error) {
     console.error('Error creating dispatch guide:', error);
     return NextResponse.json(
-      { error: 'Error al crear guía de despacho' },
+      { error: 'Error al crear guia de despacho' },
       { status: 500 }
     );
   }
