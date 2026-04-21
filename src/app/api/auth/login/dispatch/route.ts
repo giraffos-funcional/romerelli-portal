@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     await setSession({
-      partnerId: 9999, // demo mode
+      partnerId: 0, // real Odoo mode (module romerelli_portal installed)
       partnerName: user.displayName,
       vat: '',
       email: `${username}@romerelli.cl`,
