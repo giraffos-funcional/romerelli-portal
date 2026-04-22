@@ -1,6 +1,36 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+interface TodayGuide {
+  id: number;
+  name: string;
+  scheduled_date: string;
+  state: string;
+  partner_name: string;
+  guide_type: string;
+  peso?: number;
+  patente?: string;
+}
+
+const STATE_LABELS: Record<string, string> = {
+  draft: 'Borrador',
+  waiting: 'Esperando',
+  confirmed: 'Confirmada',
+  assigned: 'Lista',
+  done: 'Realizada',
+  cancel: 'Cancelada',
+};
+
+const STATE_COLORS: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-600',
+  waiting: 'bg-amber-100 text-amber-700',
+  confirmed: 'bg-sky-100 text-sky-700',
+  assigned: 'bg-indigo-100 text-indigo-700',
+  done: 'bg-emerald-100 text-emerald-700',
+  cancel: 'bg-red-100 text-red-700',
+};
 
 const GUIDE_TYPES = [
   {
@@ -39,6 +69,17 @@ const GUIDE_TYPES = [
 ];
 
 export default function DispatchPage() {
+  const [todayGuides, setTodayGuides] = useState<TodayGuide[]>([]);
+  const [loadingToday, setLoadingToday] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dispatch/today')
+      .then((r) => r.json())
+      .then((data) => setTodayGuides(Array.isArray(data.guides) ? data.guides : []))
+      .catch(() => setTodayGuides([]))
+      .finally(() => setLoadingToday(false));
+  }, []);
+
   return (
     <div>
       <div className="mb-8">
@@ -74,6 +115,69 @@ export default function DispatchPage() {
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* Today's guides widget */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+            Gu&iacute;as de Hoy
+          </h2>
+          {!loadingToday && todayGuides.length > 0 && (
+            <span className="text-xs text-slate-400">{todayGuides.length} registrada{todayGuides.length === 1 ? '' : 's'}</span>
+          )}
+        </div>
+
+        {loadingToday ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-400">
+            Cargando...
+          </div>
+        ) : todayGuides.length === 0 ? (
+          <div className="bg-white rounded-xl border border-dashed border-slate-200 p-8 text-center">
+            <p className="text-sm text-slate-400">No hay gu&iacute;as creadas hoy.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <ul className="divide-y divide-slate-100">
+              {todayGuides.map((g) => (
+                <li key={g.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <div className="shrink-0 w-2 h-2 rounded-full bg-sky-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 tracking-tight">{g.name || `#${g.id}`}</span>
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${STATE_COLORS[g.state] || 'bg-slate-100 text-slate-600'}`}>
+                        {STATE_LABELS[g.state] || g.state}
+                      </span>
+                      {g.guide_type === 'export' && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                          Export
+                        </span>
+                      )}
+                      {g.guide_type === 'transfer' && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                          Traslado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {g.partner_name || 'Sin destinatario'}
+                      {g.peso ? ` \u2022 ${g.peso} kg` : ''}
+                      {g.patente ? ` \u2022 ${g.patente}` : ''}
+                    </p>
+                  </div>
+                  <a
+                    href={`/api/dispatch/${g.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs font-semibold text-sky-600 hover:text-sky-700 px-3 py-1.5 rounded-lg hover:bg-sky-50 transition-colors"
+                  >
+                    PDF
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Admin section: Export Shipments */}

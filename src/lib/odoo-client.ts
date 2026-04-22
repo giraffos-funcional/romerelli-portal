@@ -822,6 +822,79 @@ export async function getPartnerConfig(partnerId: number) {
 }
 
 // ============================================================
+// PUBLIC API — Pickings list (for dashboard "mis guias de hoy")
+// ============================================================
+
+export interface PickingSummary {
+  id: number;
+  name: string;
+  scheduled_date: string;
+  state: string;
+  partner_name: string;
+  guide_type: string;
+  peso?: number;
+  patente?: string;
+}
+
+/**
+ * List stock.picking records created by a given user within a date range.
+ * Used by the cajera dashboard to show "my guides today".
+ */
+export async function listUserPickings(params: {
+  uid?: number;
+  dateFrom: string; // YYYY-MM-DD
+  dateTo: string;   // YYYY-MM-DD
+  limit?: number;
+}): Promise<PickingSummary[]> {
+  const { uid, dateFrom, dateTo, limit = 50 } = params;
+  const domain: unknown[] = [
+    ['create_date', '>=', `${dateFrom} 00:00:00`],
+    ['create_date', '<=', `${dateTo} 23:59:59`],
+  ];
+  if (uid) domain.unshift(['create_uid', '=', uid]);
+
+  const records = await execute<Array<Record<string, unknown>>>(
+    'stock.picking',
+    'search_read',
+    [
+      domain,
+      [
+        'id',
+        'name',
+        'scheduled_date',
+        'state',
+        'partner_id',
+        'x_shipment_id',
+        'picking_type_id',
+        'x_peso',
+        'x_patente',
+      ],
+    ],
+    { order: 'create_date desc', limit }
+  );
+
+  return records.map((r) => {
+    const pickingTypeCode = Array.isArray(r.picking_type_id)
+      ? (r.picking_type_id[1] as string).toLowerCase()
+      : '';
+    let guideType = 'national';
+    if (r.x_shipment_id) guideType = 'export';
+    else if (pickingTypeCode.includes('internal') || pickingTypeCode.includes('traslado'))
+      guideType = 'transfer';
+    return {
+      id: r.id as number,
+      name: (r.name as string) || '',
+      scheduled_date: (r.scheduled_date as string) || '',
+      state: (r.state as string) || '',
+      partner_name: Array.isArray(r.partner_id) ? (r.partner_id[1] as string) : '',
+      guide_type: guideType,
+      peso: (r.x_peso as number) || undefined,
+      patente: (r.x_patente as string) || undefined,
+    };
+  });
+}
+
+// ============================================================
 // HEALTH CHECK
 // ============================================================
 
