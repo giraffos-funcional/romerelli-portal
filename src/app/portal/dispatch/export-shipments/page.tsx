@@ -26,6 +26,9 @@ const STATE_BADGES: Record<string, { label: string; className: string }> = {
 export default function ExportShipmentsPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [filterState, setFilterState] = useState<string>('all');
+  const [filterCapacity, setFilterCapacity] = useState<string>('all');
 
   useEffect(() => {
     fetch('/api/export-shipments')
@@ -34,6 +37,21 @@ export default function ExportShipmentsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const visibleShipments = shipments.filter((s) => {
+    if (filterState !== 'all' && s.state !== filterState) return false;
+    if (filterCapacity === 'available' && s.containersUsed >= s.containerLimit) return false;
+    if (filterCapacity === 'full' && s.containersUsed < s.containerLimit) return false;
+    if (filterQuery) {
+      const q = filterQuery.toLowerCase();
+      const hay = [s.name, s.dus, s.booking, s.despacho, s.saleOrderName, s.customsAgencyName]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <div>
@@ -66,8 +84,65 @@ export default function ExportShipmentsPage() {
         </Link>
       </div>
 
+      {/* Filters */}
+      {!loading && shipments.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-5 grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              Buscar
+            </label>
+            <input
+              type="text"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder="DUS, booking, OV, agencia..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700 placeholder:text-slate-300"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              Estado
+            </label>
+            <select
+              value={filterState}
+              onChange={(e) => setFilterState(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
+            >
+              <option value="all">Todos</option>
+              <option value="draft">Borrador</option>
+              <option value="active">Activo</option>
+              <option value="closed">Cerrado</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              Capacidad
+            </label>
+            <select
+              value={filterCapacity}
+              onChange={(e) => setFilterCapacity(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
+            >
+              <option value="all">Todas</option>
+              <option value="available">Con cupo</option>
+              <option value="full">Llenos</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-slate-400">Cargando...</div>
+      ) : visibleShipments.length === 0 && shipments.length > 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-slate-200 p-8 text-center">
+          <p className="text-sm text-slate-400">Ning&uacute;n embarque coincide con los filtros.</p>
+          <button
+            onClick={() => { setFilterQuery(''); setFilterState('all'); setFilterCapacity('all'); }}
+            className="mt-2 text-xs font-semibold text-sky-600 hover:text-sky-700"
+          >
+            Limpiar filtros
+          </button>
+        </div>
       ) : shipments.length === 0 ? (
         <div className="text-center py-12">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
@@ -93,7 +168,7 @@ export default function ExportShipmentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {shipments.map((s) => {
+                {visibleShipments.map((s) => {
                   const badge = STATE_BADGES[s.state] || STATE_BADGES.draft;
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
