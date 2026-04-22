@@ -41,6 +41,7 @@ function DispatchForm() {
   const config = TYPE_CONFIG[guideType] || TYPE_CONFIG.transfer;
 
   const [partner, setPartner] = useState<{ id: number; name: string } | null>(null);
+  const [recentPartners, setRecentPartners] = useState<Array<{ id: number; name: string }>>([]);
   const [dateDispatch, setDateDispatch] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<ProductLine[]>([]);
@@ -73,6 +74,19 @@ function DispatchForm() {
   const [warehouseDestId, setWarehouseDestId] = useState('');
   const [costCenterId, setCostCenterId] = useState('');
 
+  // Load recent partners from localStorage (last 5 selected)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('romerelli.recentPartners');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setRecentPartners(parsed.slice(0, 5));
+      }
+    } catch {
+      // ignore bad localStorage payload
+    }
+  }, []);
+
   // Fetch warehouses for all guide types; cost centers only for transfer
   useEffect(() => {
     fetch('/api/warehouses')
@@ -87,9 +101,23 @@ function DispatchForm() {
     }
   }, [guideType]);
 
+  // Persist partner to recents (dedupe + cap at 5)
+  const persistRecentPartner = useCallback((p: { id: number; name: string }) => {
+    try {
+      const raw = localStorage.getItem('romerelli.recentPartners');
+      const prev: Array<{ id: number; name: string }> = raw ? JSON.parse(raw) : [];
+      const deduped = [p, ...prev.filter((x) => x.id !== p.id)].slice(0, 5);
+      localStorage.setItem('romerelli.recentPartners', JSON.stringify(deduped));
+      setRecentPartners(deduped);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Check per-client fixed pricing when partner changes
   const handlePartnerChange = useCallback((newPartner: { id: number; name: string } | null) => {
     setPartner(newPartner);
+    if (newPartner) persistRecentPartner(newPartner);
     if (newPartner && guideType === 'national') {
       // Fetch the full partner to check for fixedPrice
       fetch(`/api/partners?q=${encodeURIComponent(newPartner.name)}`)
@@ -107,7 +135,7 @@ function DispatchForm() {
     } else {
       setClientFixedPrice(undefined);
     }
-  }, [guideType]);
+  }, [guideType, persistRecentPartner]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -251,15 +279,34 @@ function DispatchForm() {
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <SearchSelect
-              label="Destinatario"
-              placeholder="Buscar por nombre o RUT..."
-              apiUrl="/api/partners"
-              value={partner}
-              onChange={handlePartnerChange}
-              secondaryField="vat"
-              required
-            />
+            <div>
+              <SearchSelect
+                label="Destinatario"
+                placeholder="Buscar por nombre o RUT..."
+                apiUrl="/api/partners"
+                value={partner}
+                onChange={handlePartnerChange}
+                secondaryField="vat"
+                required
+              />
+              {recentPartners.length > 0 && !partner && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider self-center mr-1">
+                    Recientes:
+                  </span>
+                  {recentPartners.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handlePartnerChange(p)}
+                      className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 hover:bg-sky-100 hover:text-sky-700 transition-colors truncate max-w-[200px]"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
