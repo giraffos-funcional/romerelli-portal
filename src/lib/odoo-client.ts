@@ -391,7 +391,23 @@ export async function fetchOdooReportPdf(
   reportName: string,
   recordId: number
 ): Promise<Buffer> {
-  // Try the API-key friendly path first.
+  // Preferred path: call our module's public wrapper on stock.picking,
+  // which internally invokes ir.actions.report._render_qweb_pdf. This works
+  // with API-key auth because the method name is not underscore-prefixed.
+  if (reportName === 'romerelli_portal.report_dispatch_guide_document') {
+    try {
+      const b64 = await execute<string>(
+        'stock.picking',
+        'portal_render_dispatch_pdf',
+        [recordId]
+      );
+      if (b64) return Buffer.from(b64, 'base64');
+    } catch (err) {
+      console.warn('[odoo-pdf-portal-wrapper-failed]', String(err));
+    }
+  }
+
+  // Best-effort RPC fallback (may fail when Odoo blocks underscore methods).
   try {
     const result = await execute<[string, string]>(
       'ir.actions.report',
@@ -401,8 +417,8 @@ export async function fetchOdooReportPdf(
     if (Array.isArray(result) && result[0]) {
       return Buffer.from(result[0], 'base64');
     }
-  } catch {
-    // Fall through to legacy session-based path if available.
+  } catch (err) {
+    console.warn('[odoo-pdf-rpc-fallback-failed]', String(err));
   }
 
   const sessionId = await getOdooWebSession();
