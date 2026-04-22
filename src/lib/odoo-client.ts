@@ -658,7 +658,12 @@ export async function createDispatchGuide(data: {
   if (data.tipoMaterial !== undefined) pickingValues.x_tipo_material = data.tipoMaterial;
   if (data.referencia !== undefined) pickingValues.x_referencia = data.referencia;
   if (data.saleOrderId !== undefined) pickingValues.sale_id = data.saleOrderId;
-  if (data.companyId !== undefined) pickingValues.company_id = data.companyId;
+  // NOTE: company_id is intentionally NOT forced onto the picking. Odoo
+  // infers the company from picking_type_id / warehouse; forcing an
+  // override causes "Empresas incompatibles" errors when the user's
+  // session company doesn't match the warehouse's company. Multi-company
+  // context is still passed via allowed_company_ids in execute().
+  void data.companyId;
 
   const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
 
