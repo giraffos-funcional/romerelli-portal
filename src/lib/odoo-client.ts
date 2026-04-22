@@ -230,9 +230,36 @@ export async function getInvoiceDetail(
         [
           'name', 'product_id', 'quantity', 'price_unit',
           'price_subtotal', 'price_total', 'display_type',
+          'product_uom_id',
         ],
       ]
     );
+
+    // Enrich lines with weight: quantity * product.weight (kg).
+    const productIds = Array.from(
+      new Set(
+        lines
+          .map((l) => (l.product_id as [number, string] | false))
+          .filter(Boolean)
+          .map((p) => (p as [number, string])[0])
+      )
+    );
+    if (productIds.length > 0) {
+      const products = await execute<Array<Record<string, unknown>>>(
+        'product.product',
+        'read',
+        [productIds, ['weight']]
+      );
+      const weightById = new Map<number, number>(
+        products.map((p) => [p.id as number, (p.weight as number) || 0])
+      );
+      lines = lines.map((l) => {
+        const pid = (l.product_id as [number, string] | false);
+        const unitWeight = pid ? weightById.get(pid[0]) ?? 0 : 0;
+        const qty = (l.quantity as number) || 0;
+        return { ...l, weight: unitWeight * qty };
+      });
+    }
   }
 
   return { ...invoice, lines };
@@ -242,20 +269,38 @@ export async function getInvoiceDetail(
  * Fetch invoice PDF from Odoo's report service.
  * Uses the standard account.report_invoice report endpoint.
  *
- * TODO: Validate the exact auth flow with the target Odoo instance.
- * Odoo report downloads generally require a session cookie (web login) rather
- * than plain API key auth. One common approach is:
- *   1. POST to /web/session/authenticate to get a session cookie.
- *   2. GET /report/pdf/account.report_invoice/<id> with that cookie.
- * Adjust once the Odoo module / instance is available for testing.
+ * Uses web session cookie (POST /web/session/authenticate, then GET the report).
  */
 export async function getInvoicePdf(invoiceId: number): Promise<Buffer> {
-  // Placeholder — implement once Odoo instance is available.
-  // Keeping a clear signature so the route layer is already wired up.
-  throw new Error(
-    `getInvoicePdf: not implemented (invoiceId=${invoiceId}). ` +
-      'Implement Odoo /report/pdf/account.report_invoice/<id> fetch with proper auth.'
+  // Authenticate a web session, then stream the PDF report.
+  const authRes = await fetch(`${ODOO_URL}/web/session/authenticate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      params: {
+        db: ODOO_DB,
+        login: ODOO_API_USER,
+        password: ODOO_API_KEY,
+      },
+    }),
+  });
+  const setCookie = authRes.headers.get('set-cookie');
+  if (!authRes.ok || !setCookie) {
+    throw new Error(`Odoo session auth failed: ${authRes.status}`);
+  }
+  const sessionId = /session_id=([^;]+)/.exec(setCookie)?.[1];
+  if (!sessionId) throw new Error('No session_id cookie returned by Odoo');
+
+  const pdfRes = await fetch(
+    `${ODOO_URL}/report/pdf/account.report_invoice/${invoiceId}`,
+    { headers: { Cookie: `session_id=${sessionId}` } }
   );
+  if (!pdfRes.ok) {
+    throw new Error(`Odoo PDF download failed: ${pdfRes.status}`);
+  }
+  const ab = await pdfRes.arrayBuffer();
+  return Buffer.from(ab);
 }
 
 // ============================================================
@@ -350,33 +395,70 @@ export async function createDispatchGuide(data: {
   chofer?: string;
   tipoMaterial?: string;
   referencia?: string;
+  // Transfer-specific
+  warehouseOriginId?: number;
+  warehouseDestId?: number;
+  costCenterId?: number;
 }) {
-  // Get the default outgoing picking type
+  // Pick the right picking type for the guide type.
+  //  - transfer: internal transfer between warehouses
+  //  - export / dispatch: outgoing
+  // For transfers, if warehouses are provided, find an internal picking type
+  // on the origin warehouse so the stock.move is posted correctly.
+  const isTransfer = data.guideType === 'transfer';
+  const code = isTransfer ? 'internal' : 'outgoing';
+  const domain: unknown[] = [['code', '=', code]];
+  if (isTransfer && data.warehouseOriginId) {
+    domain.push(['warehouse_id', '=', data.warehouseOriginId]);
+  }
+
   const pickingTypes = await execute<Array<Record<string, unknown>>>(
     'stock.picking.type',
     'search_read',
     [
-      [['code', '=', 'outgoing']],
+      domain,
       ['id', 'name', 'default_location_src_id', 'default_location_dest_id', 'warehouse_id'],
     ],
     { limit: 1 }
   );
 
   if (pickingTypes.length === 0) {
-    throw new Error('No outgoing picking type found');
+    throw new Error(`No ${code} picking type found`);
   }
 
   const pickingType = pickingTypes[0];
+
+  // For transfers with explicit dest warehouse, resolve its stock location.
+  let overrideDestLoc: number | undefined;
+  if (isTransfer && data.warehouseDestId) {
+    const wh = await execute<Array<Record<string, unknown>>>(
+      'stock.warehouse',
+      'read',
+      [[data.warehouseDestId], ['lot_stock_id']]
+    );
+    if (wh.length > 0 && wh[0].lot_stock_id) {
+      overrideDestLoc = (wh[0].lot_stock_id as [number, string])[0];
+    }
+  }
   const destinationPartnerId = data.customsAgencyId || data.partnerId;
 
   // Build the picking create dict. Transport fields are custom (x_*) and
   // only sent when provided — Odoo rejects unknown fields if the module
   // isn't installed, so callers are responsible for gating on deployment.
+  const srcLoc = (pickingType.default_location_src_id as [number, string])[0];
+  const destLoc = overrideDestLoc
+    ?? (pickingType.default_location_dest_id as [number, string])[0];
+
+  const moveExtra: Record<string, unknown> = {};
+  if (data.costCenterId) {
+    moveExtra.analytic_distribution = { [String(data.costCenterId)]: 100 };
+  }
+
   const pickingValues: Record<string, unknown> = {
     partner_id: destinationPartnerId,
     picking_type_id: pickingType.id,
-    location_id: (pickingType.default_location_src_id as [number, string])[0],
-    location_dest_id: (pickingType.default_location_dest_id as [number, string])[0],
+    location_id: srcLoc,
+    location_dest_id: destLoc,
     origin: data.notes || `Portal - ${data.guideType}`,
     scheduled_date: data.dateDispatch,
     move_ids_without_package: data.lines.map((line) => [
@@ -385,8 +467,9 @@ export async function createDispatchGuide(data: {
         product_id: line.productId,
         product_uom_qty: line.quantity,
         product_uom: line.uomId,
-        location_id: (pickingType.default_location_src_id as [number, string])[0],
-        location_dest_id: (pickingType.default_location_dest_id as [number, string])[0],
+        location_id: srcLoc,
+        location_dest_id: destLoc,
+        ...moveExtra,
       },
     ]),
   };
@@ -399,6 +482,15 @@ export async function createDispatchGuide(data: {
   if (data.saleOrderId !== undefined) pickingValues.sale_id = data.saleOrderId;
 
   const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
+
+  // For transfers, auto-confirm the picking so stock moves are posted.
+  if (isTransfer) {
+    try {
+      await execute('stock.picking', 'action_confirm', [[pickingId]]);
+    } catch (err) {
+      console.warn('action_confirm failed (transfer not confirmed):', err);
+    }
+  }
 
   return pickingId;
 }
@@ -461,14 +553,19 @@ export async function getAllowedCompanies(uid: number) {
 /**
  * Get material types from Odoo.
  *
- * TODO: Once the custom module exists, fetch from `x_romerelli.material.type`
- * or from the selection on stock.picking.x_tipo_material. For now this
- * returns an empty list; the API route falls back to the hardcoded list.
+ * Reads the Selection values of stock.picking.x_tipo_material so the portal
+ * always reflects what the installed module accepts.
  */
 export async function getMaterialTypes(): Promise<
-  Array<Record<string, unknown>>
+  Array<{ value: string; label: string }>
 > {
-  return [];
+  const fields = await execute<Record<string, { selection?: Array<[string, string]> }>>(
+    'stock.picking',
+    'fields_get',
+    [['x_tipo_material'], ['selection']]
+  );
+  const selection = fields?.x_tipo_material?.selection || [];
+  return selection.map(([value, label]) => ({ value, label }));
 }
 
 // ============================================================
@@ -476,9 +573,7 @@ export async function getMaterialTypes(): Promise<
 // ============================================================
 
 /**
- * List export shipments.
- *
- * TODO: Adjust model name and field list after the Odoo module is installed.
+ * List export shipments (x_romerelli.export.shipment).
  */
 export async function getExportShipments() {
   return execute<Array<Record<string, unknown>>>(
@@ -504,8 +599,6 @@ export async function getExportShipments() {
 
 /**
  * Get a single shipment with its containers.
- *
- * TODO: Adjust model names after the Odoo module exists.
  */
 export async function getExportShipmentDetail(shipmentId: number) {
   const shipments = await execute<Array<Record<string, unknown>>>(

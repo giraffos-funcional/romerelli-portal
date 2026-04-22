@@ -30,13 +30,14 @@ export async function GET() {
     return NextResponse.json(MATERIAL_TYPES);
   }
 
-  // Production: try Odoo, fall back to the hardcoded list if empty.
+  // Production: read the Selection from stock.picking.x_tipo_material.
   try {
     const fromOdoo = await getMaterialTypes();
     if (fromOdoo && fromOdoo.length > 0) {
-      return NextResponse.json(fromOdoo);
+      return NextResponse.json(
+        fromOdoo.map((t) => ({ id: t.value, name: t.label }))
+      );
     }
-    // TODO: remove the fallback once x_romerelli.material.type is populated.
     return NextResponse.json(MATERIAL_TYPES);
   } catch (error) {
     console.error('Error fetching material types:', error);

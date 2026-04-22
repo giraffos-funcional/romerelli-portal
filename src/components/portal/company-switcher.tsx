@@ -12,14 +12,10 @@ interface CompanySwitcherProps {
   currentCompanyName?: string;
 }
 
-const COMPANIES: Company[] = [
-  { id: 1, name: 'Romerelli SpA' },
-  { id: 2, name: 'Romerelli Exportaciones Ltda.' },
-];
-
 export function CompanySwitcher({ currentCompanyId, currentCompanyName }: CompanySwitcherProps) {
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,6 +27,16 @@ export function CompanySwitcher({ currentCompanyId, currentCompanyName }: Compan
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!open || companies.length > 0) return;
+    fetch('/api/auth/companies')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.companies)) setCompanies(data.companies);
+      })
+      .catch(() => {});
+  }, [open, companies.length]);
 
   async function switchCompany(companyId: number) {
     if (companyId === currentCompanyId) {
@@ -81,7 +87,10 @@ export function CompanySwitcher({ currentCompanyId, currentCompanyName }: Compan
               Cambiar empresa
             </p>
           </div>
-          {COMPANIES.map((company) => (
+          {companies.length === 0 && (
+            <div className="px-3 py-3 text-xs text-slate-400">Cargando empresas...</div>
+          )}
+          {companies.map((company) => (
             <button
               key={company.id}
               onClick={() => switchCompany(company.id)}

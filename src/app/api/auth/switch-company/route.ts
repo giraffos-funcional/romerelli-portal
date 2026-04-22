@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, setSession } from '@/lib/session';
 import { DEMO_COMPANIES } from '@/lib/demo-dispatch';
+import { getAllowedCompanies } from '@/lib/odoo-client';
+
+const DEMO_PARTNER_ID = 9999;
+const ODOO_API_UID = 2;
 
 /**
  * POST /api/auth/switch-company
@@ -16,14 +20,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { companyId } = body;
 
-    // TODO: In production, validate companyId against the Odoo user's
-    // allowed_company_ids via getAllowedCompanies(uid) from odoo-client.
-    // For now, only DEMO_COMPANIES are accepted — multi-company switching
-    // will require the real Odoo session bound to a specific user.
-    const company = DEMO_COMPANIES.find((c) => c.id === companyId);
+    // Validate against allowed companies for this session context.
+    let company: { id: number; name: string } | undefined;
+    if (session.partnerId === DEMO_PARTNER_ID) {
+      company = DEMO_COMPANIES.find((c) => c.id === companyId);
+    } else {
+      const allowed = await getAllowedCompanies(ODOO_API_UID);
+      const match = allowed.find((c) => (c.id as number) === companyId);
+      if (match) company = { id: match.id as number, name: match.name as string };
+    }
+
     if (!company) {
       return NextResponse.json(
-        { error: 'Empresa no encontrada' },
+        { error: 'Empresa no encontrada o no autorizada' },
         { status: 400 }
       );
     }

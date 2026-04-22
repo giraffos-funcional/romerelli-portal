@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
       guideType, partnerId, dateDispatch, lines, notes,
       peso, patente, chofer, tipoMaterial, referencia,
       useFixedPrice,
+      // Transfer fields
+      warehouseOriginId, warehouseDestId, costCenterId,
       // Export fields
       shipmentId, containerNumber, sealNumber, netWeight, tareWeight,
     } = body;
@@ -116,6 +118,9 @@ export async function POST(request: NextRequest) {
       chofer,
       tipoMaterial,
       referencia,
+      warehouseOriginId,
+      warehouseDestId,
+      costCenterId,
     });
 
     // For export guides, also register the container in the shipment.
