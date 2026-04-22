@@ -381,18 +381,35 @@ async function getOdooWebSession(): Promise<string> {
 }
 
 /**
- * Fetch an arbitrary Odoo QWeb report as a PDF buffer (session-authenticated).
+ * Fetch an arbitrary Odoo QWeb report as a PDF buffer via JSON-RPC.
+ *
+ * Uses ir.actions.report._render_qweb_pdf which works with API-key auth
+ * (unlike /web/session/authenticate which requires a real password).
+ * Returns [base64_pdf, 'pdf'] that we decode here.
  */
 export async function fetchOdooReportPdf(
   reportName: string,
   recordId: number
 ): Promise<Buffer> {
+  // Try the API-key friendly path first.
+  try {
+    const result = await execute<[string, string]>(
+      'ir.actions.report',
+      '_render_qweb_pdf',
+      [reportName, [recordId]]
+    );
+    if (Array.isArray(result) && result[0]) {
+      return Buffer.from(result[0], 'base64');
+    }
+  } catch {
+    // Fall through to legacy session-based path if available.
+  }
+
   const sessionId = await getOdooWebSession();
   const res = await fetch(`${ODOO_URL}/report/pdf/${reportName}/${recordId}`, {
     headers: { Cookie: `session_id=${sessionId}` },
   });
   if (res.status === 401 || res.status === 403) {
-    // Session expired — clear cache and retry once.
     cachedSession = null;
     const fresh = await getOdooWebSession();
     const retry = await fetch(
