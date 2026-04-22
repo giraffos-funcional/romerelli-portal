@@ -73,13 +73,13 @@ function DispatchForm() {
   const [warehouseDestId, setWarehouseDestId] = useState('');
   const [costCenterId, setCostCenterId] = useState('');
 
-  // Fetch warehouses and cost centers for transfer type
+  // Fetch warehouses for all guide types; cost centers only for transfer
   useEffect(() => {
+    fetch('/api/warehouses')
+      .then((r) => r.json())
+      .then((data) => setWarehouses(Array.isArray(data) ? data : []))
+      .catch(() => {});
     if (guideType === 'transfer') {
-      fetch('/api/warehouses')
-        .then((r) => r.json())
-        .then((data) => setWarehouses(Array.isArray(data) ? data : []))
-        .catch(() => {});
       fetch('/api/cost-centers')
         .then((r) => r.json())
         .then((data) => setCostCenters(Array.isArray(data) ? data : []))
@@ -198,8 +198,10 @@ function DispatchForm() {
         payload.tareWeight = parseFloat(containerData.tareWeight);
       }
 
+      if (warehouseOriginId) {
+        payload.warehouseOriginId = parseInt(warehouseOriginId, 10);
+      }
       if (guideType === 'transfer') {
-        payload.warehouseOriginId = warehouseOriginId ? parseInt(warehouseOriginId, 10) : undefined;
         payload.warehouseDestId = warehouseDestId ? parseInt(warehouseDestId, 10) : undefined;
         payload.costCenterId = costCenterId ? parseInt(costCenterId, 10) : undefined;
       }
@@ -213,7 +215,10 @@ function DispatchForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      router.push(`/portal/dispatch/success?name=${encodeURIComponent(data.guide?.name || 'GD')}&type=${guideType}`);
+      const pickingId = data.pickingId || data.guide?.id;
+      const warning = data.warning ? `&warning=${encodeURIComponent(data.warning)}` : '';
+      const pid = pickingId ? `&pickingId=${pickingId}` : '';
+      router.push(`/portal/dispatch/success?name=${encodeURIComponent(data.guide?.name || 'GD')}&type=${guideType}${pid}${warning}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear la guia');
     } finally {
@@ -283,6 +288,28 @@ function DispatchForm() {
             />
           </div>
         </div>
+
+        {/* Warehouse origin — non-transfer types (transfer has its own 3-col block) */}
+        {guideType !== 'transfer' && warehouses.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              Bodega de Origen
+            </label>
+            <select
+              value={warehouseOriginId}
+              onChange={(e) => setWarehouseOriginId(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50/50 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all text-slate-700"
+            >
+              <option value="">Seleccionar bodega...</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Desde qu&eacute; bodega sale el material. Si se deja vac&iacute;o, Odoo usa la bodega por defecto.
+            </p>
+          </div>
+        )}
 
         {/* Transport data — all guide types */}
         <TransportFields values={transport} onChange={setTransport} />

@@ -14,6 +14,8 @@ function SuccessContent() {
   const searchParams = useSearchParams();
   const guideName = searchParams.get('name') || 'GD-XXXXX';
   const guideType = searchParams.get('type') || 'transfer';
+  const pickingId = searchParams.get('pickingId');
+  const warning = searchParams.get('warning');
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
@@ -35,11 +37,33 @@ function SuccessContent() {
           <p className="text-sm text-slate-500 mt-1">Tipo: {TYPE_LABELS[guideType] || guideType}</p>
         </div>
 
+        {warning && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 text-left">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-1">
+              Atenci&oacute;n
+            </p>
+            <p className="text-sm text-amber-800">{warning}</p>
+          </div>
+        )}
+
         <p className="text-sm text-slate-500 mb-8">
-          La guía de despacho ha sido registrada en el sistema. Puede generar otra guía o volver al menú principal.
+          La guía de despacho ha sido registrada en el sistema. Puede descargar el PDF, generar otra guía o volver al menú principal.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center flex-wrap">
+          {pickingId && (
+            <a
+              href={`/api/dispatch/${pickingId}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors shadow-lg shadow-sky-600/25 inline-flex items-center gap-2 justify-center"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              Descargar PDF
+            </a>
+          )}
           <Link
             href="/portal/dispatch"
             className="px-6 py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/25"
