@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_PARTNERS } from '@/lib/demo-dispatch';
 import { getPartnerConfig } from '@/lib/odoo-client';
@@ -52,7 +53,7 @@ export async function GET(
       fixedPriceValue: Number(config.x_fixed_price_value) || 0,
     });
   } catch (error) {
-    console.error('Error fetching partner config:', error);
+    logger.error('Error fetching partner config:', error);
     return NextResponse.json(
       { error: 'Error al obtener configuracion del cliente' },
       { status: 500 }

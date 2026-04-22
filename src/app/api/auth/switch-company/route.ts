@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession, setSession } from '@/lib/session';
 import { DEMO_COMPANIES } from '@/lib/demo-dispatch';
 import { getAllowedCompanies } from '@/lib/odoo-client';
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, company });
   } catch (error) {
-    console.error('Switch company error:', error);
+    logger.error('Switch company error:', error);
     return NextResponse.json(
       { error: 'Error al cambiar empresa' },
       { status: 500 }

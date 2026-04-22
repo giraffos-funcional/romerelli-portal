@@ -105,6 +105,82 @@ async function execute<T = unknown>(
 }
 
 // ============================================================
+// PUBLIC API — Dispatch user authentication
+// ============================================================
+
+/**
+ * Authenticate a dispatch user (cajera / admin_comex) directly against Odoo.
+ * Returns the Odoo uid + detected role based on Romerelli Portal groups.
+ *
+ * Never caches — this is a login request, must always hit Odoo.
+ */
+export async function authenticateDispatchUser(
+  login: string,
+  password: string
+): Promise<
+  | { uid: number; name: string; role: 'cajera' | 'admin_comex'; companyId: number; companyName: string }
+  | null
+> {
+  const uid = await jsonRpc<number | false>(
+    `${ODOO_URL}/jsonrpc`,
+    'call',
+    {
+      service: 'common',
+      method: 'authenticate',
+      args: [ODOO_DB, login, password, {}],
+    }
+  );
+  if (!uid) return null;
+
+  // Read the user to resolve name, company, and Romerelli groups.
+  // Use the API-key UID (not the just-authenticated user) to avoid leaking
+  // the user's password on every request.
+  const users = await execute<Array<Record<string, unknown>>>(
+    'res.users',
+    'read',
+    [[uid], ['name', 'groups_id', 'company_id']]
+  );
+  if (users.length === 0) return null;
+
+  const user = users[0];
+  const groupIds = (user.groups_id as number[]) || [];
+
+  // Resolve group xml-ids → role. Look up romerelli_portal.group_cajera / group_admin_comex.
+  const romerelliGroups = await execute<Array<Record<string, unknown>>>(
+    'ir.model.data',
+    'search_read',
+    [
+      [
+        ['module', '=', 'romerelli_portal'],
+        ['name', 'in', ['group_cajera', 'group_admin_comex']],
+      ],
+      ['name', 'res_id'],
+    ]
+  );
+  const cajeraId = romerelliGroups.find((g) => g.name === 'group_cajera')?.res_id as number | undefined;
+  const adminComexId = romerelliGroups.find((g) => g.name === 'group_admin_comex')?.res_id as number | undefined;
+
+  let role: 'cajera' | 'admin_comex' = 'cajera';
+  if (adminComexId && groupIds.includes(adminComexId)) {
+    role = 'admin_comex';
+  } else if (cajeraId && groupIds.includes(cajeraId)) {
+    role = 'cajera';
+  } else {
+    // User has no Romerelli portal group — reject login.
+    return null;
+  }
+
+  const company = user.company_id as [number, string];
+  return {
+    uid,
+    name: user.name as string,
+    role,
+    companyId: company[0],
+    companyName: company[1],
+  };
+}
+
+// ============================================================
 // PUBLIC API — Vendor Portal
 // ============================================================
 
@@ -271,8 +347,16 @@ export async function getInvoiceDetail(
  *
  * Uses web session cookie (POST /web/session/authenticate, then GET the report).
  */
-export async function getInvoicePdf(invoiceId: number): Promise<Buffer> {
-  // Authenticate a web session, then stream the PDF report.
+// Cache Odoo web session cookie — reused across PDF downloads.
+// Odoo sessions last ~7 days; we rotate every 6h to stay well within.
+let cachedSession: { sessionId: string; expiresAt: number } | null = null;
+const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function getOdooWebSession(): Promise<string> {
+  if (cachedSession && cachedSession.expiresAt > Date.now()) {
+    return cachedSession.sessionId;
+  }
+
   const authRes = await fetch(`${ODOO_URL}/web/session/authenticate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -292,15 +376,38 @@ export async function getInvoicePdf(invoiceId: number): Promise<Buffer> {
   const sessionId = /session_id=([^;]+)/.exec(setCookie)?.[1];
   if (!sessionId) throw new Error('No session_id cookie returned by Odoo');
 
-  const pdfRes = await fetch(
-    `${ODOO_URL}/report/pdf/account.report_invoice/${invoiceId}`,
-    { headers: { Cookie: `session_id=${sessionId}` } }
-  );
-  if (!pdfRes.ok) {
-    throw new Error(`Odoo PDF download failed: ${pdfRes.status}`);
+  cachedSession = { sessionId, expiresAt: Date.now() + SESSION_TTL_MS };
+  return sessionId;
+}
+
+/**
+ * Fetch an arbitrary Odoo QWeb report as a PDF buffer (session-authenticated).
+ */
+export async function fetchOdooReportPdf(
+  reportName: string,
+  recordId: number
+): Promise<Buffer> {
+  const sessionId = await getOdooWebSession();
+  const res = await fetch(`${ODOO_URL}/report/pdf/${reportName}/${recordId}`, {
+    headers: { Cookie: `session_id=${sessionId}` },
+  });
+  if (res.status === 401 || res.status === 403) {
+    // Session expired — clear cache and retry once.
+    cachedSession = null;
+    const fresh = await getOdooWebSession();
+    const retry = await fetch(
+      `${ODOO_URL}/report/pdf/${reportName}/${recordId}`,
+      { headers: { Cookie: `session_id=${fresh}` } }
+    );
+    if (!retry.ok) throw new Error(`Odoo PDF fetch failed: ${retry.status}`);
+    return Buffer.from(await retry.arrayBuffer());
   }
-  const ab = await pdfRes.arrayBuffer();
-  return Buffer.from(ab);
+  if (!res.ok) throw new Error(`Odoo PDF fetch failed: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+export async function getInvoicePdf(invoiceId: number): Promise<Buffer> {
+  return fetchOdooReportPdf('account.report_invoice', invoiceId);
 }
 
 // ============================================================
@@ -484,15 +591,19 @@ export async function createDispatchGuide(data: {
   const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
 
   // For transfers, auto-confirm the picking so stock moves are posted.
+  // Caller receives a structured result so UI can surface partial success.
+  let confirmed = true;
+  let confirmError: string | undefined;
   if (isTransfer) {
     try {
       await execute('stock.picking', 'action_confirm', [[pickingId]]);
     } catch (err) {
-      console.warn('action_confirm failed (transfer not confirmed):', err);
+      confirmed = false;
+      confirmError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  return pickingId;
+  return { pickingId, confirmed, confirmError };
 }
 
 // ============================================================

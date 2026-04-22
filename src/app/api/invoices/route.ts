@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { getVendorInvoices } from '@/lib/odoo-client';
 import { DEMO_INVOICES } from '@/lib/demo-data';
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       pages: Math.ceil(result.total / limit),
     });
   } catch (error) {
-    console.error('Error fetching invoices:', error);
+    logger.error('Error fetching invoices:', error);
     return NextResponse.json(
       { error: 'Error al obtener facturas' },
       { status: 500 }

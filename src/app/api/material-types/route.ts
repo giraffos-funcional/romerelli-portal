@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { getMaterialTypes } from '@/lib/odoo-client';
 
@@ -40,7 +41,7 @@ export async function GET() {
     }
     return NextResponse.json(MATERIAL_TYPES);
   } catch (error) {
-    console.error('Error fetching material types:', error);
+    logger.error('Error fetching material types:', error);
     return NextResponse.json(MATERIAL_TYPES);
   }
 }

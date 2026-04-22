@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { getWarehouses } from '@/lib/odoo-client';
 
@@ -27,7 +28,7 @@ export async function GET() {
     const warehouses = await getWarehouses();
     return NextResponse.json(warehouses);
   } catch (error) {
-    console.error('Error fetching warehouses:', error);
+    logger.error('Error fetching warehouses:', error);
     return NextResponse.json(
       { error: 'Error al obtener bodegas' },
       { status: 500 }

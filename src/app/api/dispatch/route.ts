@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { createDemoGuide, DEMO_GUIDES } from '@/lib/demo-dispatch';
 import { addDemoContainer } from '@/lib/demo-export-shipments';
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
     // partner config endpoint); we only forward the already-priced lines.
     void useFixedPrice;
 
-    const pickingId = await createDispatchGuide({
+    const { pickingId, confirmed, confirmError } = await createDispatchGuide({
       partnerId,
       guideType,
       dateDispatch,
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
           tareWeight: Number(tareWeight) || 0,
         });
       } catch (error) {
-        console.error('Error registering container:', error);
+        logger.error('Error registering container:', error);
         // Picking was created; surface a partial-success error for the UI.
         return NextResponse.json(
           {
@@ -148,9 +149,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, pickingId });
+    return NextResponse.json({
+      ok: true,
+      pickingId,
+      confirmed,
+      ...(confirmError ? { warning: confirmError } : {}),
+    });
   } catch (error) {
-    console.error('Error creating dispatch guide:', error);
+    logger.error('Error creating dispatch guide:', error);
     return NextResponse.json(
       { error: 'Error al crear guia de despacho' },
       { status: 500 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import {
   DEMO_SHIPMENTS,
@@ -29,7 +30,7 @@ export async function GET() {
     const shipments = await getExportShipments();
     return NextResponse.json({ shipments });
   } catch (error) {
-    console.error('Error fetching shipments:', error);
+    logger.error('Error fetching shipments:', error);
     return NextResponse.json(
       { error: 'Error al obtener embarques' },
       { status: 500 }
@@ -86,14 +87,14 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ ok: true, shipmentId });
     } catch (error) {
-      console.error('Error creating shipment in Odoo:', error);
+      logger.error('Error creating shipment in Odoo:', error);
       return NextResponse.json(
         { error: 'Error al crear embarque en Odoo' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error creating shipment:', error);
+    logger.error('Error creating shipment:', error);
     return NextResponse.json(
       { error: 'Error al crear embarque' },
       { status: 500 }

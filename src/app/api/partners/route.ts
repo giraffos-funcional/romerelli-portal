@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_PARTNERS } from '@/lib/demo-dispatch';
 import { searchPartners } from '@/lib/odoo-client';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     const partners = await searchPartners(query, { isCustomer, isSupplier });
     return NextResponse.json(partners);
   } catch (error) {
-    console.error('Error fetching partners:', error);
+    logger.error('Error fetching partners:', error);
     return NextResponse.json(
       { error: 'Error al obtener clientes' },
       { status: 500 }

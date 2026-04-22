@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { validateVendor } from '@/lib/odoo-client';
 import { setSession } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     return NextResponse.json(
       { error: 'Error de conexion con el servidor' },
       { status: 500 }

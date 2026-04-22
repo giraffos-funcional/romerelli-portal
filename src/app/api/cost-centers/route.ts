@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { getCostCenters } from '@/lib/odoo-client';
 
@@ -28,7 +29,7 @@ export async function GET() {
     const costCenters = await getCostCenters();
     return NextResponse.json(costCenters);
   } catch (error) {
-    console.error('Error fetching cost centers:', error);
+    logger.error('Error fetching cost centers:', error);
     return NextResponse.json(
       { error: 'Error al obtener centros de costo' },
       { status: 500 }

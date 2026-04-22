@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_COMPANIES } from '@/lib/demo-dispatch';
 import { getAllowedCompanies } from '@/lib/odoo-client';
@@ -25,7 +26,7 @@ export async function GET() {
       companies: companies.map((c) => ({ id: c.id as number, name: c.name as string })),
     });
   } catch (error) {
-    console.error('Error fetching companies:', error);
+    logger.error('Error fetching companies:', error);
     // Fallback: expose the current session company so the UI isn't empty.
     return NextResponse.json({
       companies: session.companyId && session.companyName

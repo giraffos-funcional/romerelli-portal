@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_SALE_ORDERS } from '@/lib/demo-dispatch';
 import { searchSaleOrders } from '@/lib/odoo-client';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     const orders = await searchSaleOrders(query);
     return NextResponse.json(orders);
   } catch (error) {
-    console.error('Error fetching sale orders:', error);
+    logger.error('Error fetching sale orders:', error);
     return NextResponse.json(
       { error: 'Error al obtener ordenes de venta' },
       { status: 500 }

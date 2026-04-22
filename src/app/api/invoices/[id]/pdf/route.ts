@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { getInvoicePdf } from '@/lib/odoo-client';
 
@@ -45,7 +46,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching invoice PDF:', error);
+    logger.error('Error fetching invoice PDF:', error);
     return NextResponse.json(
       { error: 'Descarga de PDF no disponible — conexion Odoo pendiente' },
       { status: 503 }

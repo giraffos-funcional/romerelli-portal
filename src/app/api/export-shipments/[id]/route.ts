@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_SHIPMENTS, DEMO_CONTAINERS } from '@/lib/demo-export-shipments';
 import { getExportShipmentDetail } from '@/lib/odoo-client';
@@ -44,7 +45,7 @@ export async function GET(
     }
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error fetching shipment detail:', error);
+    logger.error('Error fetching shipment detail:', error);
     return NextResponse.json(
       { error: 'Error al obtener embarque' },
       { status: 500 }
