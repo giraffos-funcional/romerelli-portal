@@ -55,7 +55,7 @@ export default function DispatchLoginPage() {
         <div className="bg-white/[0.97] backdrop-blur-sm rounded-2xl shadow-2xl shadow-black/20 p-8 sm:p-10 border border-white/20">
           {/* Header */}
           <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-slate-900 mb-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-slate-900 mb-4 ring-1 ring-white/10 shadow-lg shadow-emerald-500/10">
               <svg
                 className="w-7 h-7 text-emerald-400"
                 fill="none"
@@ -66,7 +66,7 @@ export default function DispatchLoginPage() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75"
+                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
                 />
               </svg>
             </div>
@@ -149,12 +149,13 @@ export default function DispatchLoginPage() {
             </button>
           </form>
 
-          {/* Demo hint */}
+          {/* Security hint */}
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="text-xs text-slate-400 text-center space-y-1">
-              <p className="font-medium text-slate-500">Usuarios de demo:</p>
-              <p>cajera1 / demo123 (rol cajera)</p>
-              <p>admin.comex / demo123 (rol admin comex)</p>
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              <span>Acceso restringido a personal autorizado</span>
             </div>
           </div>
         </div>
