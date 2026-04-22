@@ -595,7 +595,7 @@ export async function createDispatchGuide(data: {
     'search_read',
     [
       domain,
-      ['id', 'name', 'default_location_src_id', 'default_location_dest_id', 'warehouse_id'],
+      ['id', 'name', 'default_location_src_id', 'default_location_dest_id', 'warehouse_id', 'company_id'],
     ],
     { limit: 1 }
   );
@@ -658,14 +658,29 @@ export async function createDispatchGuide(data: {
   if (data.tipoMaterial !== undefined) pickingValues.x_tipo_material = data.tipoMaterial;
   if (data.referencia !== undefined) pickingValues.x_referencia = data.referencia;
   if (data.saleOrderId !== undefined) pickingValues.sale_id = data.saleOrderId;
-  // NOTE: company_id is intentionally NOT forced onto the picking. Odoo
-  // infers the company from picking_type_id / warehouse; forcing an
-  // override causes "Empresas incompatibles" errors when the user's
-  // session company doesn't match the warehouse's company. Multi-company
-  // context is still passed via allowed_company_ids in execute().
+  // NOTE: we do NOT force company_id in the create values — Odoo infers it
+  // from picking_type_id. But we DO need to pass the picking type's company
+  // in the Odoo context so downstream auto-created records (stock.move,
+  // stock.move.line) land in the same company; otherwise the API-key user's
+  // default company is applied and multi-company constraints reject the
+  // picking. data.companyId (session company) is intentionally ignored for
+  // the same reason — warehouse/picking_type is the source of truth.
   void data.companyId;
 
-  const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
+  const pickingTypeCompanyId =
+    pickingType.company_id && Array.isArray(pickingType.company_id)
+      ? (pickingType.company_id as [number, string])[0]
+      : undefined;
+  const createCtx: Record<string, unknown> = pickingTypeCompanyId
+    ? { allowed_company_ids: [pickingTypeCompanyId], default_company_id: pickingTypeCompanyId }
+    : {};
+
+  const pickingId = await execute<number>(
+    'stock.picking',
+    'create',
+    [pickingValues],
+    { context: createCtx }
+  );
 
   // For transfers, auto-confirm + validate so stock actually moves between
   // warehouses. Caller receives a structured result so the UI can surface
@@ -675,24 +690,25 @@ export async function createDispatchGuide(data: {
   let confirmError: string | undefined;
   if (isTransfer) {
     try {
-      await execute('stock.picking', 'action_confirm', [[pickingId]]);
+      await execute('stock.picking', 'action_confirm', [[pickingId]], { context: createCtx });
       // After confirm, set quantity_done on each move so button_validate
       // knows how much to actually transfer.
       const moves = await execute<Array<Record<string, unknown>>>(
         'stock.move',
         'search_read',
-        [[['picking_id', '=', pickingId]], ['id', 'product_uom_qty']]
+        [[['picking_id', '=', pickingId]], ['id', 'product_uom_qty']],
+        { context: createCtx }
       );
       for (const move of moves) {
         const qty = (move.product_uom_qty as number) || 0;
         await execute('stock.move', 'write', [
           [move.id as number],
           { quantity: qty, picked: true },
-        ]);
+        ], { context: createCtx });
       }
       // Now validate — this actually posts the stock movement.
       try {
-        await execute('stock.picking', 'button_validate', [[pickingId]]);
+        await execute('stock.picking', 'button_validate', [[pickingId]], { context: createCtx });
         validated = true;
       } catch (err) {
         confirmError = `Confirmado pero no validado: ${
