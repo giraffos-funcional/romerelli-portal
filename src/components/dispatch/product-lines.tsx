@@ -17,6 +17,11 @@ interface ProductLinesProps {
   onChange: (lines: ProductLine[]) => void;
   showPrice: boolean;
   fixedPrice?: number;
+  /**
+   * Include consumables / non-sellable items in the product search.
+   * Used for internal transfers where non-catalog goods may be moved.
+   */
+  includeNonSellable?: boolean;
 }
 
 interface Product {
@@ -26,7 +31,7 @@ interface Product {
   uom_id: [number, string];
 }
 
-export function ProductLines({ lines, onChange, showPrice, fixedPrice }: ProductLinesProps) {
+export function ProductLines({ lines, onChange, showPrice, fixedPrice, includeNonSellable }: ProductLinesProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -34,7 +39,9 @@ export function ProductLines({ lines, onChange, showPrice, fixedPrice }: Product
   useEffect(() => {
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?q=${encodeURIComponent(searchQuery)}`);
+        const params = new URLSearchParams({ q: searchQuery });
+        if (includeNonSellable) params.set('includeNonSellable', 'true');
+        const res = await fetch(`/api/products?${params}`);
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
       } catch {

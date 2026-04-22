@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     // partner config endpoint); we only forward the already-priced lines.
     void useFixedPrice;
 
-    const { pickingId, confirmed, confirmError } = await createDispatchGuide({
+    const { pickingId, confirmed, validated, confirmError } = await createDispatchGuide({
       partnerId,
       guideType,
       dateDispatch,
@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
       warehouseOriginId,
       warehouseDestId,
       costCenterId,
+      companyId: session.companyId,
     });
 
     // For export guides, also register the container in the shipment.
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       pickingId,
       confirmed,
+      validated,
       ...(confirmError ? { warning: confirmError } : {}),
     });
   } catch (error) {

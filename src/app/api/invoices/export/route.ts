@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { DEMO_INVOICES } from '@/lib/demo-data';
+import { getVendorInvoices } from '@/lib/odoo-client';
 
 const DEMO_PARTNER_ID = 9999;
+const EXPORT_LIMIT = 5000;
 
 /**
  * GET /api/invoices/export
@@ -20,7 +23,28 @@ export async function GET(request: NextRequest) {
   const dateTo = searchParams.get('dateTo') || '';
   const q = searchParams.get('q') || '';
 
-  let invoices = session.partnerId === DEMO_PARTNER_ID ? [...DEMO_INVOICES] : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let invoices: any[] = [];
+
+  if (session.partnerId === DEMO_PARTNER_ID) {
+    invoices = [...DEMO_INVOICES];
+  } else {
+    try {
+      const result = await getVendorInvoices(session.partnerId, {
+        limit: EXPORT_LIMIT,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        paymentState: paymentState || undefined,
+      });
+      invoices = result.invoices;
+    } catch (err) {
+      logger.error('invoices-export-odoo-failed', { err: String(err) });
+      return NextResponse.json(
+        { error: 'Error al exportar facturas' },
+        { status: 500 }
+      );
+    }
+  }
 
   // Apply filters
   if (q) {

@@ -119,14 +119,14 @@ function DispatchForm() {
     setPartner(newPartner);
     if (newPartner) persistRecentPartner(newPartner);
     if (newPartner && guideType === 'national') {
-      // Fetch the full partner to check for fixedPrice
-      fetch(`/api/partners?q=${encodeURIComponent(newPartner.name)}`)
+      // Ask the dedicated config endpoint for per-partner fixed pricing.
+      fetch(`/api/partners/${newPartner.id}/config`)
         .then((r) => r.json())
-        .then((partners: Array<{ id: number; fixedPrice?: number }>) => {
-          const found = partners.find((p) => p.id === newPartner.id);
-          if (found?.fixedPrice) {
-            setClientFixedPrice(found.fixedPrice);
-            setLines((prev) => prev.map((l) => ({ ...l, priceUnit: found.fixedPrice as number })));
+        .then((cfg: { fixedPrice?: boolean; fixedPriceValue?: number }) => {
+          if (cfg?.fixedPrice && cfg.fixedPriceValue && cfg.fixedPriceValue > 0) {
+            const value = cfg.fixedPriceValue;
+            setClientFixedPrice(value);
+            setLines((prev) => prev.map((l) => ({ ...l, priceUnit: value })));
           } else {
             setClientFixedPrice(undefined);
           }
@@ -470,6 +470,7 @@ function DispatchForm() {
               onChange={setLines}
               showPrice={config.showPrice}
               fixedPrice={clientFixedPrice}
+              includeNonSellable={guideType === 'transfer'}
             />
           </div>
         )}

@@ -394,6 +394,19 @@ export async function fetchOdooReportPdf(
   // Preferred path: call our module's public wrapper on stock.picking,
   // which internally invokes ir.actions.report._render_qweb_pdf. This works
   // with API-key auth because the method name is not underscore-prefixed.
+  //
+  // Note: fetchOdooReportPdf receives either a report XMLID (e.g.
+  // 'account.report_invoice') or the QWeb template name
+  // ('romerelli_portal.report_dispatch_guide_document'). Map the template
+  // to the action XMLID when calling the generic wrapper.
+  const reportToActionXmlid: Record<string, string> = {
+    'romerelli_portal.report_dispatch_guide_document':
+      'romerelli_portal.report_dispatch_guide',
+    'account.report_invoice': 'account.report_invoice',
+    'account.account_invoices': 'account.account_invoices',
+  };
+
+  // Dispatch guide uses the dedicated wrapper (kept for backward compat).
   if (reportName === 'romerelli_portal.report_dispatch_guide_document') {
     try {
       const b64 = await execute<string>(
@@ -404,6 +417,21 @@ export async function fetchOdooReportPdf(
       if (b64) return Buffer.from(b64, 'base64');
     } catch (err) {
       console.warn('[odoo-pdf-portal-wrapper-failed]', String(err));
+    }
+  }
+
+  // Generic wrapper handles invoice reports (and any future allow-listed ones).
+  const actionXmlid = reportToActionXmlid[reportName];
+  if (actionXmlid) {
+    try {
+      const b64 = await execute<string>(
+        'stock.picking',
+        'portal_render_report_pdf',
+        [actionXmlid, recordId]
+      );
+      if (b64) return Buffer.from(b64, 'base64');
+    } catch (err) {
+      console.warn('[odoo-pdf-generic-wrapper-failed]', String(err));
     }
   }
 
@@ -494,19 +522,27 @@ export async function searchPartners(
 
 /**
  * Get products for dispatch guide line selection.
+ *
+ * By default only sellable stockable products are returned (sale_ok=true).
+ * For internal transfers we include non-sellable consumables too, since
+ * the warehouse might move items that are not part of the catalog.
  */
-export async function searchProducts(query: string) {
+export async function searchProducts(
+  query: string,
+  options: { includeNonSellable?: boolean } = {}
+) {
+  const domain: unknown[] = [
+    '|',
+    ['name', 'ilike', query],
+    ['default_code', 'ilike', query],
+  ];
+  if (!options.includeNonSellable) {
+    domain.push(['sale_ok', '=', true]);
+  }
   return execute<Array<Record<string, unknown>>>(
     'product.product',
     'search_read',
-    [
-      [
-        '|',
-        ['name', 'ilike', query],
-        ['default_code', 'ilike', query],
-      ],
-      ['name', 'default_code', 'uom_id'],
-    ],
+    [domain, ['name', 'default_code', 'uom_id', 'type', 'sale_ok']],
     { limit: 20 }
   );
 }
@@ -539,6 +575,8 @@ export async function createDispatchGuide(data: {
   warehouseOriginId?: number;
   warehouseDestId?: number;
   costCenterId?: number;
+  // Multi-company: force the picking into a specific company
+  companyId?: number;
 }) {
   // Pick the right picking type for the guide type.
   //  - transfer: internal transfer between warehouses
@@ -620,23 +658,49 @@ export async function createDispatchGuide(data: {
   if (data.tipoMaterial !== undefined) pickingValues.x_tipo_material = data.tipoMaterial;
   if (data.referencia !== undefined) pickingValues.x_referencia = data.referencia;
   if (data.saleOrderId !== undefined) pickingValues.sale_id = data.saleOrderId;
+  if (data.companyId !== undefined) pickingValues.company_id = data.companyId;
 
   const pickingId = await execute<number>('stock.picking', 'create', [pickingValues]);
 
-  // For transfers, auto-confirm the picking so stock moves are posted.
-  // Caller receives a structured result so UI can surface partial success.
+  // For transfers, auto-confirm + validate so stock actually moves between
+  // warehouses. Caller receives a structured result so the UI can surface
+  // partial success (picking created but validation failed).
   let confirmed = true;
+  let validated = false;
   let confirmError: string | undefined;
   if (isTransfer) {
     try {
       await execute('stock.picking', 'action_confirm', [[pickingId]]);
+      // After confirm, set quantity_done on each move so button_validate
+      // knows how much to actually transfer.
+      const moves = await execute<Array<Record<string, unknown>>>(
+        'stock.move',
+        'search_read',
+        [[['picking_id', '=', pickingId]], ['id', 'product_uom_qty']]
+      );
+      for (const move of moves) {
+        const qty = (move.product_uom_qty as number) || 0;
+        await execute('stock.move', 'write', [
+          [move.id as number],
+          { quantity: qty, picked: true },
+        ]);
+      }
+      // Now validate — this actually posts the stock movement.
+      try {
+        await execute('stock.picking', 'button_validate', [[pickingId]]);
+        validated = true;
+      } catch (err) {
+        confirmError = `Confirmado pero no validado: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
+      }
     } catch (err) {
       confirmed = false;
       confirmError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  return { pickingId, confirmed, confirmError };
+  return { pickingId, confirmed, validated, confirmError };
 }
 
 // ============================================================

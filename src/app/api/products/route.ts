@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get('q') || '').toLowerCase();
+  // Transfers may need non-sellable items (consumables, internal-only goods).
+  const includeNonSellable = searchParams.get('includeNonSellable') === 'true';
 
   if (session.partnerId === DEMO_PARTNER_ID) {
     const filtered = query
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const products = await searchProducts(query);
+    const products = await searchProducts(query, { includeNonSellable });
     return NextResponse.json(products);
   } catch (error) {
     logger.error('Error fetching products:', error);
