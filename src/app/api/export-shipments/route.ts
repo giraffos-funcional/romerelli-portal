@@ -27,7 +27,28 @@ export async function GET() {
   }
 
   try {
-    const shipments = await getExportShipments();
+    const raw = await getExportShipments();
+    // Map snake_case Odoo fields + Many2one tuples to the camelCase shape
+    // the UI expects (containersUsed/containerLimit/customsAgencyName, etc.).
+    const shipments = raw.map((s) => {
+      const saleOrder = s.sale_order_id as [number, string] | false;
+      const agency = s.customs_agency_id as [number, string] | false;
+      return {
+        id: s.id,
+        name: s.name,
+        dus: s.dus,
+        despacho: s.despacho || '',
+        booking: s.booking || '',
+        saleOrderId: saleOrder ? saleOrder[0] : null,
+        saleOrderName: saleOrder ? saleOrder[1] : '',
+        customsAgencyId: agency ? agency[0] : null,
+        customsAgencyName: agency ? agency[1] : '',
+        containerLimit: (s.container_limit as number) || 0,
+        containersUsed: (s.container_count as number) || 0,
+        state: (s.state as string) || 'draft',
+        createdAt: (s.create_date as string) || '',
+      };
+    });
     return NextResponse.json({ shipments });
   } catch (error) {
     logger.error('Error fetching shipments:', error);
